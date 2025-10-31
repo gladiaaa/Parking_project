@@ -1,0 +1,38 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE / Editor
+.vscode/
+.idea/
+*.code-workspace
+
+# Dependencies / Builds
+node_modules/
+vendor/
+
+# Composer cache
+composer.phar
+composer.lock
+
+# Env & config locaux
+.env
+.env.local
+.env.*.local
+
+# Logs / runtime
+*.log
+logs/
+error_log
+storage/
+tmp/
+cache/
+cookies.txt
+
+# Coverage / tests
+coverage/
+.phpunit.result.cache
+
+# Misc
+dist/
+build/
