@@ -17,7 +17,6 @@ Le projet consiste à créer une application web complète permettant la gestion
 ```
 frontend/
 ├── src/
-│   ├── assets/ → images, icônes, etc.
 │   ├── components/ → composants réutilisables
 │   │   ├── Header.jsx → Navigation avec gestion des rôles
 │   │   ├── Footer.jsx → Pied de page
