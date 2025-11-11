@@ -1,56 +1,75 @@
 <?php
 class Parking
 {
+    private bool $isReserved;
     private string $gps;
-    private float $tarif;
-    private DateTime $HeureDebut;
-    private DateTime $HeureFin;
-    private array $list_reservation;
-    private array $list_stationnement;
+    private float $rate;
+    private DateTime $startTime;
+    private DateTime $endTime;
+    private array $reservations;
+    private array $parkingSpots;
+
     public function __construct(
+        bool $isReserved,
         string $gps,
-        float $tarif,
-        DateTime $HeureDebut,
-        DateTime $HeureFin,
-        array $list_stationnement,
-        array $list_reservation = []
+        float $rate,
+        DateTime $startTime,
+        DateTime $endTime,
+        array $parkingSpots,
+        array $reservations = []
     ) {
+        $this->isReserved = $isReserved;
         $this->gps = $gps;
-        $this->tarif = $tarif;
-        $this->HeureDebut = $HeureDebut;
-        $this->HeureFin = $HeureFin;
-        $this->list_reservation = $list_reservation;
-        $this->list_stationnement = $list_stationnement;
+        $this->rate = $rate;
+        $this->startTime = $startTime;
+        $this->endTime = $endTime;
+        $this->reservations = $reservations;
+        $this->parkingSpots = $parkingSpots;
     }
 
-    public function getHeureFin(): DateTime
+    public function getIsReserved(): bool
     {
-        return $this->HeureFin;
+        return $this->isReserved;
     }
 
-    public function setHeureFin(DateTime $HeureFin): void
+    public function setIsReserved(bool $isReserved): void
     {
-        $this->HeureFin = $HeureFin;
+        $this->isReserved = $isReserved;
     }
 
-    public function getHeureDebut(): DateTime
+    public function isReserved(): bool
     {
-        return $this->HeureDebut;
+        return $this->isReserved === true;
     }
 
-    public function setHeureDebut(DateTime $HeureDebut): void
+    public function getEndTime(): DateTime
     {
-        $this->HeureDebut = $HeureDebut;
+        return $this->endTime;
     }
 
-    public function getTarif(): float
+    public function setEndTime(DateTime $endTime): void
     {
-        return $this->tarif;
+        $this->endTime = $endTime;
     }
 
-    public function setTarif(float $tarif): void
+    public function getStartTime(): DateTime
     {
-        $this->tarif = $tarif;
+        return $this->startTime;
+    }
+
+    public function setStartTime(DateTime $startTime): void
+    {
+        $this->startTime = $startTime;
+    }
+
+    public function getRate(): float
+    {
+        return $this->rate;
+    }
+
+    public function setRate(float $rate): void
+    {
+        $this->rate = $rate;
     }
 
     public function getGps(): string
@@ -63,23 +82,24 @@ class Parking
         $this->gps = $gps;
     }
 
-    public function getListReservation(): array
+    public function getReservations(): array
     {
-        return $this->list_reservation;
+        return $this->reservations;
     }
 
-    public function setListReservation(array $list_reservation): void
+    public function setReservations(array $reservations): void
     {
-        $this->list_reservation = $list_reservation;
+        $this->reservations = $reservations;
     }
 
-    public function getListStationnement(): array
+    public function getParkingSpots(): array
     {
-        return $this->list_stationnement;
+        return $this->parkingSpots;
     }
 
-    public function setListStationnement(array $list_stationnement): void
+    public function setParkingSpots(array $parkingSpots): void
     {
-        $this->list_stationnement = $list_stationnement;
+        $this->parkingSpots = $parkingSpots;
     }
 }
+
