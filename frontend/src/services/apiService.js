@@ -17,7 +17,12 @@ const mockUsers = {
     firstname: 'Jean',
     lastname: 'Dupont',
     role: 'user',
-    token: 'mock-token-user-123'
+    token: 'mock-token-user-123',
+    reservations: [],
+    stationnements: [],
+    typeAbonnement: 'gratuit',
+    debutAbonnement: null,
+    finAbonnement: null
   },
   'owner@example.com': {
     id: 2,
@@ -26,7 +31,12 @@ const mockUsers = {
     firstname: 'Marie',
     lastname: 'Martin',
     role: 'owner',
-    token: 'mock-token-owner-456'
+    token: 'mock-token-owner-456',
+    reservations: [],
+    stationnements: [],
+    typeAbonnement: 'premium',
+    debutAbonnement: '2025-01-01',
+    finAbonnement: '2025-12-31'
   }
 };
 
@@ -87,7 +97,12 @@ export const apiService = {
           email: user.email,
           firstname: user.firstname,
           lastname: user.lastname,
-          role: user.role
+          role: user.role,
+          reservations: user.reservations,
+          stationnements: user.stationnements,
+          typeAbonnement: user.typeAbonnement,
+          debutAbonnement: user.debutAbonnement,
+          finAbonnement: user.finAbonnement
         }
       };
     }
@@ -105,7 +120,12 @@ export const apiService = {
     const newUser = {
       id: Date.now(),
       ...userData,
-      token: `mock-token-${userData.role}-${Date.now()}`
+      token: `mock-token-${userData.role}-${Date.now()}`,
+      reservations: [],
+      stationnements: [],
+      typeAbonnement: 'gratuit', // Par défaut, tous les nouveaux utilisateurs sont en mode gratuit
+      debutAbonnement: null,
+      finAbonnement: null
     };
     
     mockUsers[userData.email] = newUser;
@@ -119,7 +139,12 @@ export const apiService = {
         email: newUser.email,
         firstname: newUser.firstname,
         lastname: newUser.lastname,
-        role: newUser.role
+        role: newUser.role,
+        reservations: newUser.reservations,
+        stationnements: newUser.stationnements,
+        typeAbonnement: newUser.typeAbonnement,
+        debutAbonnement: newUser.debutAbonnement,
+        finAbonnement: newUser.finAbonnement
       }
     };
   },
@@ -308,6 +333,79 @@ export const apiService = {
     return {
       success: true,
       stationnements_actifs: 8
+    };
+  },
+
+  /**
+   * Récupérer les informations complètes de l'utilisateur
+   */
+  async getUserProfile(token) {
+    await delay(500);
+    
+    if (!token) {
+      throw new Error('Token manquant');
+    }
+    
+    // Trouver l'utilisateur par son token
+    const user = Object.values(mockUsers).find(u => u.token === token);
+    
+    if (!user) {
+      throw new Error('Utilisateur non trouvé');
+    }
+    
+    return {
+      success: true,
+      user: {
+        id: user.id,
+        email: user.email,
+        firstname: user.firstname,
+        lastname: user.lastname,
+        role: user.role,
+        reservations: user.reservations,
+        stationnements: user.stationnements,
+        typeAbonnement: user.typeAbonnement,
+        debutAbonnement: user.debutAbonnement,
+        finAbonnement: user.finAbonnement
+      }
+    };
+  },
+
+  /**
+   * Mettre à niveau l'abonnement de l'utilisateur
+   */
+  async upgradeAbonnement(token, typeAbonnement, dureeEnMois = 1) {
+    await delay(500);
+    
+    if (!token) {
+      throw new Error('Token manquant');
+    }
+    
+    // Trouver l'utilisateur par son token
+    const user = Object.values(mockUsers).find(u => u.token === token);
+    
+    if (!user) {
+      throw new Error('Utilisateur non trouvé');
+    }
+    
+    // Calculer les dates de début et fin
+    const debutAbonnement = new Date().toISOString().split('T')[0];
+    const finDate = new Date();
+    finDate.setMonth(finDate.getMonth() + dureeEnMois);
+    const finAbonnement = finDate.toISOString().split('T')[0];
+    
+    // Mettre à jour l'utilisateur
+    user.typeAbonnement = typeAbonnement;
+    user.debutAbonnement = debutAbonnement;
+    user.finAbonnement = finAbonnement;
+    
+    return {
+      success: true,
+      message: `Abonnement ${typeAbonnement} activé avec succès`,
+      user: {
+        typeAbonnement: user.typeAbonnement,
+        debutAbonnement: user.debutAbonnement,
+        finAbonnement: user.finAbonnement
+      }
     };
   }
 };
