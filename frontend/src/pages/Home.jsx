@@ -15,8 +15,8 @@ export default function Home() {
     <>
       {isLoading && <LoadingScreen onLoadingComplete={handleLoadingComplete} />}
       <div className="min-h-screen flex flex-col bg-white">
-        <Header />
-        <main className="flex-1">
+      <Header />
+      <main className="flex-1">
         
         {/* HERO SECTION - EXACT ZENPARK avec arrondi en bas - VERSION COMPACTE */}
         <section className="relative bg-primary text-white pt-24 pb-32 overflow-visible h-screen flex items-center">
@@ -27,11 +27,11 @@ export default function Home() {
               <div className="space-y-4">
                 {/* Titre principal */}
                 <h1 className="text-4xl md:text-5xl font-serif font-normal leading-tight mb-2">
-              Respirez, vous êtes garés.
+              Stationnez malin, vivez mieux.
             </h1>
                 <p className="text-sm md:text-base text-white/95 font-light mb-4">
-                  Réservez votre parking à l'heure, au jour<br />
-                  ou au mois et garez-vous l'esprit léger.
+                  Trouvez et réservez votre place de parking<br />
+                  en quelques clics, où que vous soyez.
                 </p>
 
                 {/* Formulaire de recherche blanc */}
@@ -194,10 +194,10 @@ export default function Home() {
         <section className="py-24 px-6 text-center bg-white">
           <div className="max-w-5xl mx-auto">
             <h2 className="text-5xl md:text-6xl font-serif font-normal mb-4 text-gray-900">
-            Comment ça marche ?
+            Simple et rapide
           </h2>
             <p className="text-gray-600 text-base font-normal mb-16 max-w-2xl mx-auto">
-            En cas de pépin, notre équipe vous accompagne pas à pas.
+            Trois étapes suffisent pour réserver votre place de parking.
           </p>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-12 mb-12">
@@ -231,9 +231,9 @@ export default function Home() {
                     <text x="165" y="42" fontSize="18" fontWeight="bold" fill="white" textAnchor="middle">1</text>
                   </svg>
                 </div>
-                <h3 className="text-xl font-semibold mb-2 text-gray-900">Trouvez votre parking</h3>
+                <h3 className="text-xl font-semibold mb-2 text-gray-900">Recherchez une place</h3>
                 <p className="text-gray-600 text-sm font-normal leading-relaxed">
-                  parmi + de 100 000 places disponibles dans 700 villes.
+                  Découvrez des milliers de parkings disponibles près de chez vous.
             </p>
           </div>
 
@@ -267,9 +267,9 @@ export default function Home() {
                     <text x="165" y="42" fontSize="18" fontWeight="bold" fill="white" textAnchor="middle">2</text>
                   </svg>
                 </div>
-                <h3 className="text-xl font-semibold mb-2 text-gray-900">Réservez votre place</h3>
+                <h3 className="text-xl font-semibold mb-2 text-gray-900">Réservez en ligne</h3>
                 <p className="text-gray-600 text-sm font-normal leading-relaxed">
-                  pour une heure, une journée ou un mois.
+                  Choisissez votre durée : horaire, journalière ou mensuelle.
             </p>
           </div>
 
@@ -311,15 +311,15 @@ export default function Home() {
                     <text x="165" y="42" fontSize="18" fontWeight="bold" fill="white" textAnchor="middle">3</text>
                   </svg>
                 </div>
-                <h3 className="text-xl font-semibold mb-2 text-gray-900">Et enfin, garez-vous</h3>
+                <h3 className="text-xl font-semibold mb-2 text-gray-900">Accédez à votre place</h3>
                 <p className="text-gray-600 text-sm font-normal leading-relaxed">
-                  avec votre smartphone comme télécommande.
+                  Présentez votre réservation et stationnez en toute tranquillité.
             </p>
           </div>
         </div>
 
             <button className="bg-primary text-white px-10 py-3.5 rounded-full hover:bg-primary-700 transition-all duration-300 shadow-md hover:shadow-lg font-normal text-base">
-            Garez-vous en toute sérénité
+            Commencer maintenant
             </button>
           </div>
         </section>
@@ -342,17 +342,17 @@ export default function Home() {
                 </div>
                 
                 <h2 className="text-5xl md:text-6xl lg:text-7xl font-serif font-light leading-[1.05] text-gray-900">
-                  Trouver une place<br />
-                  <span className="italic text-primary/80">ne devrait pas</span><br />
-                  être si compliqué.
+                  Le parking partagé<br />
+                  <span className="italic text-primary/80">repensé pour</span><br />
+                  votre quotidien.
                 </h2>
                 
                 <p className="text-lg text-gray-600 font-light leading-relaxed max-w-xl">
-                  Avec ParkingPartagé, pour une virée en ville, un rendez-vous ou un salon professionnel, garez-vous l'esprit léger.
+                  ParkingPartagé simplifie votre stationnement au quotidien. Que ce soit pour vos courses, un rendez-vous ou vos déplacements professionnels.
                 </p>
                 
                 <button className="inline-flex items-center gap-2 bg-primary text-white px-8 py-3.5 rounded-full hover:bg-primary-800 transition-all duration-300 font-light text-sm shadow-md hover:shadow-xl hover:-translate-y-0.5 group">
-                  <span>Respirez, vous êtes garés</span>
+                  <span>Découvrir l'offre</span>
                   <svg className="w-4 h-4 group-hover:translate-x-1 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"/>
                   </svg>
@@ -458,13 +458,13 @@ export default function Home() {
                 </div>
                 
                 <h2 className="text-5xl md:text-6xl font-light leading-[1.1] text-gray-900">
-                  L'expérience<br />
-                  parking<br />
-                  <span className="italic text-primary/80">réinventée</span>
+                  Un parking<br />
+                  quand vous<br />
+                  <span className="italic text-primary/80">en avez besoin</span>
                 </h2>
                 
                 <p className="text-lg text-gray-600 font-light leading-relaxed">
-                  Découvrez une nouvelle façon de vous garer en toute simplicité
+                  Accédez à des milliers de places disponibles instantanément
                 </p>
                 
                 {/* Stats inline */}
@@ -539,12 +539,12 @@ export default function Home() {
               </div>
               
               <h2 className="text-5xl md:text-6xl font-light leading-tight text-gray-900 mb-6">
-                Quel que soit votre besoin,<br />
-                <span className="text-primary italic">nous avons la place</span>
+                Des formules adaptées<br />
+                <span className="text-primary italic">à tous vos besoins</span>
           </h2>
 
               <p className="text-lg text-gray-600 font-light max-w-2xl mx-auto">
-                Choisissez la formule qui correspond à vos besoins
+                Stationnement flexible pour courte ou longue durée
               </p>
             </div>
 
@@ -633,11 +633,11 @@ export default function Home() {
             <div className="flex flex-col lg:flex-row items-start lg:items-end justify-between gap-8 mb-20">
               <div className="max-w-2xl">
                 <h2 className="text-5xl md:text-6xl font-light leading-tight text-gray-900 mb-4">
-                  Il ne vous manque plus<br />
-                  qu'<span className="italic text-primary/80">un parking</span>
+                  Partout en France,<br />
+                  <span className="italic text-primary/80">votre place vous attend</span>
                 </h2>
                 <p className="text-lg text-gray-600 font-light">
-                  pour arriver à destination
+                  Des parkings dans les plus grandes villes françaises
                 </p>
               </div>
               <button className="bg-gray-900 text-white px-6 py-3 rounded-full text-sm font-light hover:bg-gray-800 transition-all duration-300 shadow-lg">
@@ -738,11 +738,11 @@ export default function Home() {
               </div>
               
               <h2 className="text-5xl md:text-6xl font-light leading-tight mb-4">
-                500 000 automobilistes<br />
-                <span className="italic text-white/80">nous font confiance</span>
+                Des milliers d'utilisateurs<br />
+                <span className="italic text-white/80">satisfaits</span>
           </h2>
 
-              <p className="text-lg text-white/60 font-light">chaque année</p>
+              <p className="text-lg text-white/60 font-light">Découvrez leurs témoignages</p>
             </div>
 
             {/* Témoignages en masonry style */}
@@ -795,7 +795,7 @@ export default function Home() {
             {/* CTA */}
             <div className="text-center">
               <button className="bg-white text-gray-900 px-10 py-4 rounded-full hover:bg-gray-100 transition-all duration-300 shadow-2xl font-light text-base inline-flex items-center gap-2 group">
-                <span>Vous aussi trouvez votre place</span>
+                <span>Rejoignez-nous</span>
                 <svg className="w-4 h-4 group-hover:translate-x-1 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"/>
                 </svg>
@@ -958,12 +958,12 @@ export default function Home() {
                 
                 {/* Titre */}
                 <h2 className="text-5xl md:text-6xl font-light leading-[1.1] text-gray-900">
-                  Libérez votre stress<br />
-                  du <span className="italic text-primary/80">stationnement</span>
+                  Votre parking<br />
+                  <span className="italic text-primary/80">dans votre poche</span>
                 </h2>
                 
                 <p className="text-lg text-gray-600 font-light leading-relaxed max-w-xl">
-                  Garez-vous en toute sérénité avec notre application mobile intuitive
+                  Téléchargez l'app et gérez tous vos stationnements facilement
                 </p>
                 
                 {/* Features list */}
