@@ -15,56 +15,97 @@ export default function Header() {
   };
 
   return (
-    <header className="bg-[#34A853] text-white shadow-md">
-      <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-        {/* Logo */}
-        <Link to="/" className="text-2xl font-bold">
-          ParkingPartagé
+    <header className="fixed top-6 left-0 right-0 z-50 px-6">
+      <div className="max-w-7xl mx-auto flex justify-between items-center">
+        {/* Logo à gauche */}
+        <Link to="/" className="flex items-center space-x-2">
+          <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-lg">
+            <span className="text-primary font-bold text-xl">P</span>
+          </div>
         </Link>
 
-        {/* Navigation */}
-        <nav className="flex items-center space-x-6">
-          <Link to="/" className="hover:text-gray-200 transition">
+        {/* Navigation centrale - Arrondie et séparée */}
+        <nav className="flex items-center bg-gray-900 rounded-full shadow-2xl px-2 py-2">
+          <Link 
+            to="/" 
+            className="px-6 py-2.5 bg-white text-gray-900 rounded-full font-medium text-sm transition-all duration-300 hover:bg-gray-100"
+          >
             Accueil
           </Link>
-          
-          {token ? (
-            <>
-              {userRole === 'owner' ? (
-                <Link to="/dashboard-owner" className="hover:text-gray-200 transition">
-                  Espace propriétaire
-                </Link>
-              ) : (
-                <Link to="/dashboard-user" className="hover:text-gray-200 transition">
-                  Mon compte
-                </Link>
-              )}
-              <button
-                onClick={handleLogout}
-                className="bg-white text-[#34A853] px-4 py-2 rounded-lg hover:bg-gray-100 transition font-medium"
-              >
-                Se déconnecter
-              </button>
-            </>
-          ) : (
-            <>
-              <Link
-                to="/login"
-                className="hover:text-gray-200 transition"
-              >
-                Se connecter
-              </Link>
-              <Link
-                to="/register"
-                className="bg-white text-[#34A853] px-4 py-2 rounded-lg hover:bg-gray-100 transition font-medium"
-              >
-                S'inscrire
-              </Link>
-            </>
-          )}
+          <a 
+            href="#services" 
+            onClick={(e) => {
+              e.preventDefault();
+              document.querySelector('#services')?.scrollIntoView({ behavior: 'smooth' });
+            }}
+            className="px-6 py-2.5 text-white font-light text-sm transition-all duration-300 hover:text-gray-300 cursor-pointer"
+          >
+            Services
+          </a>
+          <a 
+            href="#tarifs" 
+            onClick={(e) => {
+              e.preventDefault();
+              document.querySelector('#tarifs')?.scrollIntoView({ behavior: 'smooth' });
+            }}
+            className="px-6 py-2.5 text-white font-light text-sm transition-all duration-300 hover:text-gray-300 cursor-pointer"
+          >
+            Tarifs
+          </a>
+          <a 
+            href="#villes" 
+            onClick={(e) => {
+              e.preventDefault();
+              document.querySelector('#villes')?.scrollIntoView({ behavior: 'smooth' });
+            }}
+            className="px-6 py-2.5 text-white font-light text-sm transition-all duration-300 hover:text-gray-300 cursor-pointer"
+          >
+            Villes
+          </a>
         </nav>
+
+        {/* Boutons Connexion/Inscription ou Dashboard */}
+        {token ? (
+          <div className="flex items-center gap-3">
+            {userRole === 'owner' ? (
+              <Link 
+                to="/dashboard-owner" 
+                className="bg-gray-900 text-white px-6 py-2.5 rounded-full font-light text-sm shadow-lg hover:bg-gray-800 transition-all duration-300"
+              >
+                Dashboard
+              </Link>
+            ) : (
+              <Link 
+                to="/dashboard-user" 
+                className="bg-gray-900 text-white px-6 py-2.5 rounded-full font-light text-sm shadow-lg hover:bg-gray-800 transition-all duration-300"
+              >
+                Mon compte
+              </Link>
+            )}
+            <button
+              onClick={handleLogout}
+              className="bg-primary text-white px-6 py-2.5 rounded-full font-light text-sm shadow-lg hover:bg-primary-800 transition-all duration-300"
+            >
+              Déconnexion
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-3">
+            <Link
+              to="/login"
+              className="text-gray-900 bg-white border border-gray-200 px-6 py-2.5 rounded-full font-light text-sm shadow-lg hover:bg-gray-50 transition-all duration-300"
+            >
+              Connexion
+            </Link>
+            <Link
+              to="/register"
+              className="bg-gray-900 text-white px-6 py-2.5 rounded-full font-light text-sm shadow-2xl hover:bg-gray-800 transition-all duration-300"
+            >
+              Inscription
+            </Link>
+          </div>
+        )}
       </div>
     </header>
   );
 }
-
