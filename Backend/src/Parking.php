@@ -101,5 +101,8 @@ class Parking
     {
         $this->parkingSpots = $parkingSpots;
     }
+
+
+
 }
 
