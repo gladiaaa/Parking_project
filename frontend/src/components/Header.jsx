@@ -1,18 +1,26 @@
 import React from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { apiService } from "../services/apiService";
 
 export default function Header() {
   const navigate = useNavigate();
-  const token = localStorage.getItem("token");
   const userStr = localStorage.getItem("user");
   const user = userStr ? JSON.parse(userStr) : null;
-  const userRole = user?.role || null;
+  const userRole = user?.role?.toLowerCase()?.trim() || null;
 
-  const handleLogout = () => {
-    localStorage.removeItem("token");
+  const isLoggedIn = !!user;
+
+  const handleLogout = async () => {
+    try {
+      await apiService.logout();
+    } catch (e) {
+      console.error("Erreur lors de la déconnexion :", e);
+    }
     localStorage.removeItem("user");
     navigate("/");
   };
+
+
 
   return (
     <header className="fixed top-6 left-0 right-0 z-50 px-6">
@@ -26,14 +34,14 @@ export default function Header() {
 
         {/* Navigation centrale - Arrondie et séparée */}
         <nav className="flex items-center bg-gray-900 rounded-full shadow-2xl px-2 py-2">
-          <Link 
-            to="/" 
+          <Link
+            to="/"
             className="px-6 py-2.5 bg-white text-gray-900 rounded-full font-medium text-sm transition-all duration-300 hover:bg-gray-100"
           >
             Accueil
           </Link>
-          <a 
-            href="#services" 
+          <a
+            href="#services"
             onClick={(e) => {
               e.preventDefault();
               document.querySelector('#services')?.scrollIntoView({ behavior: 'smooth' });
@@ -42,8 +50,8 @@ export default function Header() {
           >
             Services
           </a>
-          <a 
-            href="#tarifs" 
+          <a
+            href="#tarifs"
             onClick={(e) => {
               e.preventDefault();
               document.querySelector('#tarifs')?.scrollIntoView({ behavior: 'smooth' });
@@ -52,8 +60,8 @@ export default function Header() {
           >
             Tarifs
           </a>
-          <a 
-            href="#villes" 
+          <a
+            href="#villes"
             onClick={(e) => {
               e.preventDefault();
               document.querySelector('#villes')?.scrollIntoView({ behavior: 'smooth' });
@@ -65,26 +73,26 @@ export default function Header() {
         </nav>
 
         {/* Boutons Connexion/Inscription ou Dashboard */}
-        {token ? (
+        {isLoggedIn ? (
           <div className="flex items-center gap-3">
-            {userRole === 'owner' ? (
-              <Link 
-                to="/dashboard-owner" 
-                className="bg-gray-900 text-white px-6 py-2.5 rounded-full font-light text-sm shadow-lg hover:bg-gray-800 transition-all duration-300"
+            {userRole === "owner" ? (
+              <Link
+                to="/dashboard-owner"
+                className="bg-gray-900 text-white px-6 py-2.5 rounded-full text-sm shadow-lg hover:bg-gray-800 transition-all duration-300"
               >
                 Dashboard
               </Link>
             ) : (
-              <Link 
-                to="/dashboard-user" 
-                className="bg-gray-900 text-white px-6 py-2.5 rounded-full font-light text-sm shadow-lg hover:bg-gray-800 transition-all duration-300"
+              <Link
+                to="/dashboard-user"
+                className="bg-gray-900 text-white px-6 py-2.5 rounded-full text-sm shadow-lg hover:bg-gray-800 transition-all duration-300"
               >
                 Mon compte
               </Link>
             )}
             <button
               onClick={handleLogout}
-              className="bg-primary text-white px-6 py-2.5 rounded-full font-light text-sm shadow-lg hover:bg-primary-800 transition-all duration-300"
+              className="bg-white text-gray-900 px-5 py-2.5 rounded-full text-sm shadow-lg hover:bg-gray-100 transition-all duration-300"
             >
               Déconnexion
             </button>
@@ -93,18 +101,19 @@ export default function Header() {
           <div className="flex items-center gap-3">
             <Link
               to="/login"
-              className="text-gray-900 bg-white border border-gray-200 px-6 py-2.5 rounded-full font-light text-sm shadow-lg hover:bg-gray-50 transition-all duration-300"
+              className="bg-white text-gray-900 px-5 py-2.5 rounded-full text-sm shadow-lg hover:bg-gray-100 transition-all duration-300"
             >
-              Connexion
+              Se connecter
             </Link>
             <Link
               to="/register"
-              className="bg-gray-900 text-white px-6 py-2.5 rounded-full font-light text-sm shadow-2xl hover:bg-gray-800 transition-all duration-300"
+              className="bg-primary text-white px-5 py-2.5 rounded-full text-sm shadow-lg hover:bg-primary/90 transition-all duration-300"
             >
-              Inscription
+              S'inscrire
             </Link>
           </div>
         )}
+
       </div>
     </header>
   );

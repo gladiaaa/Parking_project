@@ -41,6 +41,8 @@ final class MeController
             'id'    => $user->id(),
             'email' => $user->email(),
             'role'  => $user->role(),
+            'firstname' => $user->firstname(),
+            'lastname' => $user->lastname(),
         ]);
     }
 }

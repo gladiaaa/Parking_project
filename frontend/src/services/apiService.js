@@ -1,444 +1,185 @@
+// frontend/src/services/apiService.js
+const API_BASE_URL = "http://localhost:8001";
+
+async function handleResponse(response) {
+  let data = null;
+  try {
+    data = await response.json();
+  } catch {
+    // certains endpoints peuvent ne pas renvoyer de JSON
+  }
+
+  if (!response.ok) {
+    const message =
+      data?.error ||
+      data?.message ||
+      `Erreur API (${response.status})`;
+    throw new Error(message);
+  }
+
+  return data;
+}
+
 /**
- * Service API simulé pour les appels backend
- * Tous les appels sont simulés pour l'instant jusqu'à la connexion au backend PHP
+ * Helper interne :
+ * - fait le fetch avec credentials: "include"
+ * - sur 401, tente un refresh puis rejoue la requête une fois
  */
+async function authFetch(path, options = {}, retry = true) {
+  const res = await fetch(`${API_BASE_URL}${path}`, {
+    credentials: "include",
+    ...options,
+  });
 
-const API_BASE_URL = 'http://localhost:8001/api';
+  if (res.status === 401 && retry) {
+    // tentative de refresh silencieux
+    const refreshed = await apiService.refresh();
+    if (!refreshed) {
+      return res; // token mort, on laisse la 401
+    }
 
-// Simuler un délai de réponse réseau
-const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-
-// Mock data pour les tests
-const mockUsers = {
-  'user@example.com': {
-    id: 1,
-    email: 'user@example.com',
-    password: 'password123',
-    firstname: 'Jean',
-    lastname: 'Dupont',
-    role: 'user',
-    token: 'mock-token-user-123',
-    reservations: [],
-    stationnements: [],
-    typeAbonnement: 'gratuit',
-    debutAbonnement: null,
-    finAbonnement: null
-  },
-  'owner@example.com': {
-    id: 2,
-    email: 'owner@example.com',
-    password: 'password123',
-    firstname: 'Marie',
-    lastname: 'Martin',
-    role: 'owner',
-    token: 'mock-token-owner-456',
-    reservations: [],
-    stationnements: [],
-    typeAbonnement: 'premium',
-    debutAbonnement: '2025-01-01',
-    finAbonnement: '2025-12-31'
+    // on rejoue la requête UNE seule fois
+    return authFetch(path, options, false);
   }
-};
 
-const mockParkings = [
-  {
-    id: 1,
-    nom: 'Parking Centre-Ville',
-    adresse: '15 Rue de la République, 75001 Paris',
-    nombre_places: 50,
-    places_disponibles: 35,
-    tarif_horaire: 2.5,
-    tarif_journalier: 15,
-    tarif_mensuel: 120,
-    horaire_ouverture: '06:00',
-    horaire_fermeture: '23:00'
-  },
-  {
-    id: 2,
-    nom: 'Parking Gare',
-    adresse: '8 Avenue de la Gare, 69000 Lyon',
-    nombre_places: 100,
-    places_disponibles: 67,
-    tarif_horaire: 3,
-    tarif_journalier: 18,
-    tarif_mensuel: 150,
-    horaire_ouverture: '05:00',
-    horaire_fermeture: '00:00'
-  }
-];
+  return res;
+}
 
-const mockReservations = [
-  {
-    id: 1,
-    parking_id: 1,
-    parking_nom: 'Parking Centre-Ville',
-    date_debut: '2025-01-15T10:00:00',
-    date_fin: '2025-01-15T18:00:00',
-    statut: 'confirmée',
-    montant: 20
-  }
-];
-
-// Service API
 export const apiService = {
   /**
-   * Connexion utilisateur
+   * Connexion utilisateur :
+   * - POST /api/auth/login
+   * - puis /api/me via authFetch (token fraîchement posé)
    */
   async login(email, password) {
-    await delay(500);
-    
-    const user = mockUsers[email];
-    if (user && user.password === password) {
-      return {
-        success: true,
-        token: user.token,
-        user: {
-          id: user.id,
-          email: user.email,
-          firstname: user.firstname,
-          lastname: user.lastname,
-          role: user.role,
-          reservations: user.reservations,
-          stationnements: user.stationnements,
-          typeAbonnement: user.typeAbonnement,
-          debutAbonnement: user.debutAbonnement,
-          finAbonnement: user.finAbonnement
-        }
-      };
-    }
-    
-    throw new Error('Email ou mot de passe incorrect');
-  },
-
-  /**
-   * Inscription utilisateur
-   */
-  async register(userData) {
-    await delay(500);
-    
-    // Simuler une inscription réussie
-    const newUser = {
-      id: Date.now(),
-      ...userData,
-      token: `mock-token-${userData.role}-${Date.now()}`,
-      reservations: [],
-      stationnements: [],
-      typeAbonnement: 'gratuit', // Par défaut, tous les nouveaux utilisateurs sont en mode gratuit
-      debutAbonnement: null,
-      finAbonnement: null
-    };
-    
-    mockUsers[userData.email] = newUser;
-    
-    return {
-      success: true,
-      message: 'Compte créé avec succès',
-      token: newUser.token,
-      user: {
-        id: newUser.id,
-        email: newUser.email,
-        firstname: newUser.firstname,
-        lastname: newUser.lastname,
-        role: newUser.role,
-        reservations: newUser.reservations,
-        stationnements: newUser.stationnements,
-        typeAbonnement: newUser.typeAbonnement,
-        debutAbonnement: newUser.debutAbonnement,
-        finAbonnement: newUser.finAbonnement
-      }
-    };
-  },
-
-  /**
-   * Récupérer les réservations de l'utilisateur
-   */
-  async getReservations(token) {
-    await delay(500);
-    
-    if (!token) {
-      throw new Error('Token manquant');
-    }
-    
-    return {
-      success: true,
-      reservations: mockReservations
-    };
-  },
-
-  /**
-   * Récupérer les stationnements actifs de l'utilisateur
-   */
-  async getStationnements(token) {
-    await delay(500);
-    
-    if (!token) {
-      throw new Error('Token manquant');
-    }
-    
-    // Simuler les stationnements actifs
-    return {
-      success: true,
-      stationnements: mockReservations.filter(r => r.statut === 'confirmée')
-    };
-  },
-
-  /**
-   * Récupérer les abonnements de l'utilisateur
-   */
-  async getAbonnements(token) {
-    await delay(500);
-    
-    if (!token) {
-      throw new Error('Token manquant');
-    }
-    
-    return {
-      success: true,
-      abonnements: []
-    };
-  },
-
-  /**
-   * Récupérer les parkings du propriétaire
-   */
-  async getOwnerParkings(token) {
-    await delay(500);
-    
-    if (!token) {
-      throw new Error('Token manquant');
-    }
-    
-    return {
-      success: true,
-      parkings: mockParkings
-    };
-  },
-
-  /**
-   * Ajouter un parking (propriétaire)
-   */
-  async addParking(token, parkingData) {
-    await delay(500);
-    
-    if (!token) {
-      throw new Error('Token manquant');
-    }
-    
-    const newParking = {
-      id: Date.now(),
-      ...parkingData,
-      places_disponibles: parkingData.nombre_places
-    };
-    
-    mockParkings.push(newParking);
-    
-    return {
-      success: true,
-      parking: newParking
-    };
-  },
-
-  /**
-   * Récupérer les détails d'un parking
-   */
-  async getParkingDetails(parkingId) {
-    await delay(500);
-    
-    const parking = mockParkings.find(p => p.id === parseInt(parkingId));
-    
-    if (!parking) {
-      throw new Error('Parking non trouvé');
-    }
-    
-    return {
-      success: true,
-      parking
-    };
-  },
-
-  /**
-   * Réserver un parking
-   */
-  async reserveParking(token, parkingId, reservationData) {
-    await delay(500);
-    
-    if (!token) {
-      throw new Error('Token manquant');
-    }
-    
-    const parking = mockParkings.find(p => p.id === parseInt(parkingId));
-    
-    if (!parking) {
-      throw new Error('Parking non trouvé');
-    }
-    
-    const newReservation = {
-      id: Date.now(),
-      parking_id: parkingId,
-      parking_nom: parking.nom,
-      ...reservationData,
-      statut: 'confirmée'
-    };
-    
-    mockReservations.push(newReservation);
-    
-    return {
-      success: true,
-      reservation: newReservation
-    };
-  },
-
-  /**
-   * Récupérer les revenus mensuels (propriétaire)
-   */
-  async getMonthlyRevenue(token) {
-    await delay(500);
-    
-    if (!token) {
-      throw new Error('Token manquant');
-    }
-    
-    return {
-      success: true,
-      revenus_mensuels: 2450.50
-    };
-  },
-
-  /**
-   * Récupérer les réservations en cours (propriétaire)
-   */
-  async getActiveReservations(token) {
-    await delay(500);
-    
-    if (!token) {
-      throw new Error('Token manquant');
-    }
-    
-    return {
-      success: true,
-      reservations_en_cours: 12
-    };
-  },
-
-  /**
-   * Récupérer les stationnements actifs (propriétaire)
-   */
-  async getActiveStationnements(token) {
-    await delay(500);
-    
-    if (!token) {
-      throw new Error('Token manquant');
-    }
-    
-    return {
-      success: true,
-      stationnements_actifs: 8
-    };
-  },
-
-  /**
-   * Récupérer les informations complètes de l'utilisateur
-   */
-  async getUserProfile(token) {
-    await delay(500);
-    
-    if (!token) {
-      throw new Error('Token manquant');
-    }
-    
-    // Trouver l'utilisateur par son token
-    const user = Object.values(mockUsers).find(u => u.token === token);
-    
-    if (!user) {
-      throw new Error('Utilisateur non trouvé');
-    }
-    
-    return {
-      success: true,
-      user: {
-        id: user.id,
-        email: user.email,
-        firstname: user.firstname,
-        lastname: user.lastname,
-        role: user.role,
-        reservations: user.reservations,
-        stationnements: user.stationnements,
-        typeAbonnement: user.typeAbonnement,
-        debutAbonnement: user.debutAbonnement,
-        finAbonnement: user.finAbonnement
-      }
-    };
-  },
-
-  /**
-   * Mettre à niveau l'abonnement de l'utilisateur
-   */
-  async upgradeAbonnement(token, typeAbonnement, dureeEnMois = 1) {
-    await delay(500);
-    
-    if (!token) {
-      throw new Error('Token manquant');
-    }
-    
-    // Trouver l'utilisateur par son token
-    const user = Object.values(mockUsers).find(u => u.token === token);
-    
-    if (!user) {
-      throw new Error('Utilisateur non trouvé');
-    }
-    
-    // Calculer les dates de début et fin
-    const debutAbonnement = new Date().toISOString().split('T')[0];
-    const finDate = new Date();
-    finDate.setMonth(finDate.getMonth() + dureeEnMois);
-    const finAbonnement = finDate.toISOString().split('T')[0];
-    
-    // Mettre à jour l'utilisateur
-    user.typeAbonnement = typeAbonnement;
-    user.debutAbonnement = debutAbonnement;
-    user.finAbonnement = finAbonnement;
-    
-    return {
-      success: true,
-      message: `Abonnement ${typeAbonnement} activé avec succès`,
-      user: {
-        typeAbonnement: user.typeAbonnement,
-        debutAbonnement: user.debutAbonnement,
-        finAbonnement: user.finAbonnement
-      }
-    };
-  }
-};
-
-// Fonction helper pour les appels API réels (à utiliser quand le backend sera connecté)
-export const apiCall = async (endpoint, options = {}) => {
-  const token = localStorage.getItem('token');
-  
-  const headers = {
-    'Content-Type': 'application/json',
-    ...options.headers
-  };
-  
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-  
-  try {
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-      ...options,
-      headers
+    const res = await fetch(`${API_BASE_URL}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ email, password }),
     });
-    
-    const data = await response.json();
-    
-    if (!response.ok) {
-      throw new Error(data.message || 'Erreur API');
-    }
-    
-    return data;
-  } catch (error) {
-    console.error('Erreur API:', error);
-    throw error;
-  }
-};
 
+    const data = await handleResponse(res);
+
+    if (data.status === "2fa_required") {
+      throw new Error(
+        "Double authentification requise (2FA), pas encore gérée côté interface."
+      );
+    }
+
+    const meRes = await authFetch("/api/me", {
+      method: "GET",
+    });
+
+    const me = await handleResponse(meRes);
+
+    return {
+      success: true,
+      user: {
+        id: me.id,
+        email: me.email,
+        firstname: me.firstname,
+        lastname: me.lastname,
+        role: me.role ? me.role.toLowerCase().trim() : "user",
+
+      },
+    };
+  },
+
+  /**
+   * Inscription :
+   * - POST /api/auth/register
+   * - puis login auto
+   */
+  async register(form) {
+    const res = await fetch(`${API_BASE_URL}/api/auth/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        firstname: form.firstname,
+        lastname: form.lastname,
+        email: form.email,
+        password: form.password,
+        role: form.role === "owner" ? "OWNER" : "USER",
+      }),
+    });
+
+    const data = await handleResponse(res);
+
+    // le back pose déjà les cookies ici.
+    // maintenant on récupère /api/me comme dans login()
+    const meRes = await authFetch("/api/me", { method: "GET" });
+    const me = await handleResponse(meRes);
+
+    return {
+      success: true,
+      user: {
+        id: me.id,
+        email: me.email,
+        role: me.role ? me.role.toLowerCase().trim() : "user",
+        firstname: me.firstname,
+        lastname: me.lastname,
+      },
+    };
+  }
+  ,
+
+  /**
+   * Récupère l'utilisateur courant :
+   * - GET /api/me
+   * - si 401 → tente un refresh → rejoue /api/me
+   * - si toujours 401 → retourne null
+   */
+  async getCurrentUser() {
+    const res = await authFetch("/api/me", {
+      method: "GET",
+    });
+
+    if (res.status === 401) {
+      // même après refresh → pas connecté
+      return null;
+    }
+
+    const me = await handleResponse(res);
+
+    return {
+      id: me.id,
+      email: me.email,
+      role: me.role ? me.role.toLowerCase().trim() : "user",
+
+    };
+  },
+
+  /**
+   * Appelle /api/auth/refresh pour obtenir un nouveau ACCESS_TOKEN
+   * Retourne true si ça a marché, false sinon.
+   */
+  async refresh() {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
+        method: "POST",
+        credentials: "include",
+      });
+
+      if (!res.ok) {
+        return false;
+      }
+
+      await handleResponse(res); // on ignore le contenu, on veut juste savoir si c'est ok
+      return true;
+    } catch {
+      return false;
+    }
+  },
+
+  /**
+   * Déconnexion : purge les cookies côté back
+   */
+  async logout() {
+    await fetch(`${API_BASE_URL}/api/auth/logout`, {
+      method: "POST",
+      credentials: "include",
+    });
+  },
+};

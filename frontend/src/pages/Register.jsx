@@ -21,34 +21,36 @@ export default function Register() {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError("");
-    setSuccess("");
-    setLoading(true);
+const handleSubmit = async (e) => {
+  e.preventDefault();
+  setError("");
+  setSuccess("");
+  setLoading(true);
 
-    try {
-      const result = await apiService.register(form);
-      
-      if (result.success) {
-        localStorage.setItem("token", result.token);
-        localStorage.setItem("user", JSON.stringify(result.user));
-        
-        setSuccess("Compte créé avec succès !");
-        setTimeout(() => {
-          if (result.user.role === 'owner') {
-            navigate("/dashboard-owner");
-          } else {
-            navigate("/dashboard-user");
-          }
-        }, 1500);
-      }
-    } catch (err) {
-      setError(err.message || "Erreur lors de l'inscription");
-    } finally {
-      setLoading(false);
+  try {
+    const result = await apiService.register(form);
+
+    if (result.success) {
+      // PLUS DE TOKEN, on stocke juste le user
+      localStorage.setItem("user", JSON.stringify(result.user));
+
+      setSuccess("Compte créé avec succès !");
+      setTimeout(() => {
+        if (result.user.role === "owner") {
+          navigate("/dashboard-owner");
+        } else {
+          navigate("/dashboard-user");
+        }
+      }, 1500);
+    } else {
+      setError("Impossible de créer le compte.");
     }
-  };
+  } catch (err) {
+    setError(err.message || "Erreur lors de l'inscription");
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-gray-50 to-white">

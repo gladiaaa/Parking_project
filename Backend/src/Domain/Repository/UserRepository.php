@@ -12,5 +12,11 @@ interface UserRepository
 
     // 👇 on remplace save2FA par ça
     public function save(User $user): void;
-    public function create(string $email, string $passwordHash, string $role = 'USER'): User;
+  public function create(
+    string $email,
+    string $passwordHash,
+    string $role = 'USER',
+    ?string $firstname = null,
+    ?string $lastname = null
+): User;
 }

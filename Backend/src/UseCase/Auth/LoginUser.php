@@ -13,14 +13,6 @@ final class LoginUser
         private PasswordHasher $hasher,
     ) {}
 
-    /**
-     * Retourne :
-     * - en cas d'échec : ['success' => false]
-     * - en cas de succès sans 2FA :
-     *   ['success' => true, 'two_factor_required' => false, 'user_id' => int, 'role' => string]
-     * - en cas de succès avec 2FA :
-     *   ['success' => true, 'two_factor_required' => true, 'user_id' => int, 'role' => string]
-     */
     public function execute(string $email, string $password): array
     {
         $u = $this->users->findByEmail($email);

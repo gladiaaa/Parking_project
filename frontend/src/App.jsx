@@ -16,12 +16,12 @@ function App() {
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
-        
+
         {/* Routes protégées */}
         <Route
           path="/dashboard-user"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute role="user">
               <UserDashboard />
             </ProtectedRoute>
           }
@@ -29,19 +29,19 @@ function App() {
         <Route
           path="/dashboard-owner"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute role="owner">
               <OwnerDashboard />
             </ProtectedRoute>
           }
         />
-        
+
         {/* Route publique pour les détails de parking */}
         <Route path="/parking/:id" element={<ParkingDetails />} />
-        
+
         {/* Redirection pour les routes obsolètes */}
         <Route path="/dashboard" element={<Navigate to="/dashboard-user" replace />} />
         <Route path="/owner" element={<Navigate to="/dashboard-owner" replace />} />
-        
+
         {/* Route 404 */}
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>

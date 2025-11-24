@@ -1,15 +1,17 @@
+// frontend/src/pages/Login.jsx
 import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import Header from "../components/Header";
-import Footer from "../components/Footer";
 import { apiService } from "../services/apiService";
+import Header from "../components/Header";
+import Footer from "../components/Footer";  
 
 export default function Login() {
+  const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -18,12 +20,12 @@ export default function Login() {
 
     try {
       const result = await apiService.login(email, password);
-      
+
       if (result.success) {
-        localStorage.setItem("token", result.token);
         localStorage.setItem("user", JSON.stringify(result.user));
-        
-        if (result.user.role === 'owner') {
+
+        if (result.user.role?.toLowerCase?.().trim() === "owner") {
+
           navigate("/dashboard-owner");
         } else {
           navigate("/dashboard-user");

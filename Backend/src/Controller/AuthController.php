@@ -18,14 +18,15 @@ final class AuthController
         private RegisterUser $registerUser,
         private StartTwoFactor $startTwoFactor,
         private JwtManager $jwt,
-    ) {}
+    ) {
+    }
 
     /** POST /api/auth/login */
     public function login(): void
     {
         $data = json_decode(file_get_contents('php://input'), true) ?? [];
-        $email = (string)($data['email'] ?? '');
-        $password = (string)($data['password'] ?? '');
+        $email = (string) ($data['email'] ?? '');
+        $password = (string) ($data['password'] ?? '');
 
         try {
             $result = $this->loginUser->execute($email, $password);
@@ -50,7 +51,7 @@ final class AuthController
 
             // Pas de 2FA → on génère les vrais tokens
             $userId = $result['user_id'];
-            $role   = $result['role'];
+            $role = $result['role'];
 
             [$access, $refresh] = $this->jwt->issueFor($userId, $role);
             $this->jwt->setAccessCookie($access);
@@ -64,24 +65,40 @@ final class AuthController
 
     /** POST /api/auth/register */
     public function register(): void
-    {
-        $data = json_decode(file_get_contents('php://input'), true) ?? [];
-        $email = (string)($data['email'] ?? '');
-        $password = (string)($data['password'] ?? '');
+{
+    $data = json_decode(file_get_contents('php://input'), true) ?? [];
 
-        try {
-            $user = $this->registerUser->execute($email, $password);
+    $email = $data['email'] ?? '';
+    $password = $data['password'] ?? '';
+    $role = $data['role'] ?? 'USER';
+    $firstname = $data['firstname'] ?? null;
+    $lastname = $data['lastname'] ?? null;
 
-            Response::json([
-                'status' => 'ok',
-                'user'   => $user,
-            ], 201);
-        } catch (\InvalidArgumentException $e) {
-            Response::json(['error' => $e->getMessage()], 400);
-        } catch (\RuntimeException $e) {
-            Response::json(['error' => $e->getMessage()], 409);
-        }
+    try {
+        $user = $this->registerUser->execute(
+            $email,
+            $password,
+            strtoupper($role),
+            $firstname,
+            $lastname
+        );
+
+        // Login automatique
+        [$access, $refresh] = $this->jwt->issueFor($user['id'], $user['role']);
+        $this->jwt->setAccessCookie($access);
+        $this->jwt->setRefreshCookie($refresh);
+
+        Response::json([
+            'success' => true,
+            'user' => $user,
+        ], 201);
+
+    } catch (\RuntimeException $e) {
+        Response::json(['error' => $e->getMessage()], 409);
+    } catch (\Throwable $e) {
+        Response::json(['error' => 'Error registering user'], 400);
     }
+}
 
     /** POST /api/auth/refresh */
     public function refresh(): void

@@ -6,58 +6,79 @@ import { apiService } from "../services/apiService";
 
 export default function UserDashboard() {
   const navigate = useNavigate();
+
+  const [user, setUser] = useState(() => {
+    const userStr = localStorage.getItem("user");
+    return userStr ? JSON.parse(userStr) : null;
+  });
+
   const [reservations, setReservations] = useState([]);
   const [stationnements, setStationnements] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const userStr = localStorage.getItem("user");
-  const user = userStr ? JSON.parse(userStr) : null;
 
+  // Récupérer les infos de l'utilisateur depuis le back
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (!token) {
-      navigate("/login");
-      return;
-    }
+    const fetchUser = async () => {
+      setLoading(true);
+      setError("");
 
-    loadData();
+      try {
+        const currentUser = await apiService.getCurrentUser();
+
+        if (!currentUser) {
+          // Pas connecté côté back → on redirige
+          navigate("/login");
+          return;
+        }
+
+        setUser(currentUser);
+        // On synchronise localStorage au cas où
+        localStorage.setItem("user", JSON.stringify(currentUser));
+
+        // TODO: plus tard, quand les API existeront :
+        // const reservationsRes = await apiService.getReservations();
+        // setReservations(reservationsRes.reservations || []);
+        // const stationnementsRes = await apiService.getStationnements();
+        // setStationnements(stationnementsRes.stationnements || []);
+      } catch (err) {
+        console.error(err);
+        setError(
+          err.message || "Erreur lors du chargement des informations utilisateur"
+        );
+        navigate("/login");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUser();
   }, [navigate]);
-
-  const loadData = async () => {
-    const token = localStorage.getItem("token");
-    setLoading(true);
-    setError("");
-
-    try {
-      const reservationsResult = await apiService.getReservations(token);
-      if (reservationsResult.success) {
-        setReservations(reservationsResult.reservations || []);
-      }
-
-      const stationnementsResult = await apiService.getStationnements(token);
-      if (stationnementsResult.success) {
-        setStationnements(stationnementsResult.stationnements || []);
-      }
-    } catch (err) {
-      setError(err.message || "Erreur lors du chargement des données");
-    } finally {
-      setLoading(false);
-    }
-  };
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
       <Header />
-      <main className="flex-1">
+      <main className="flex-1 pt-28">
         {/* Hero Section */}
         <section className="bg-zenpark text-white py-12">
           <div className="container mx-auto px-6 lg:px-12">
             <h1 className="text-4xl font-serif font-normal mb-2">
-              Bonjour {user?.firstname || 'Utilisateur'}
+              Bonjour{" "}
+              {user?.email
+                ? user.email
+                : "Utilisateur"}
             </h1>
             <p className="text-white/90 text-lg">
               Bienvenue sur votre espace personnel
             </p>
+            {user?.role && (
+              <p className="mt-2 text-white/80 text-sm">
+                Rôle :{" "}
+                <span className="inline-block px-3 py-1 rounded-full bg-white/10 border border-white/20">
+                  {user.role === "owner" ? "Propriétaire de parking" : "Client"}
+                </span>
+              </p>
+            )}
           </div>
         </section>
 
@@ -67,6 +88,32 @@ export default function UserDashboard() {
               {error}
             </div>
           )}
+
+          {/* Carte infos utilisateur */}
+          <section className="mb-10">
+            <div className="bg-white rounded-2xl shadow p-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+              <div>
+                <h2 className="text-2xl font-serif font-normal text-gray-900 mb-1">
+                  Mes informations
+                </h2>
+                <p className="text-gray-600 text-sm">
+                  Récapitulatif de votre compte Parking Project.
+                </p>
+              </div>
+              {user && (
+                <div className="space-y-1 text-sm text-gray-700">
+                  <p>
+                    <span className="font-medium">Email :</span>{" "}
+                    {user.email}
+                  </p>
+                  <p>
+                    <span className="font-medium">Rôle :</span>{" "}
+                    {user.role === "owner" ? "Propriétaire" : "Utilisateur"}
+                  </p>
+                </div>
+              )}
+            </div>
+          </section>
 
           {/* Quick Actions */}
           <div className="mb-12">
@@ -91,7 +138,7 @@ export default function UserDashboard() {
             ) : reservations.length === 0 ? (
               <div className="bg-white rounded-2xl shadow p-12 text-center">
                 <p className="text-gray-600 mb-6">
-                  Vous n'avez aucune réservation pour le moment.
+                  Vous n&apos;avez aucune réservation pour le moment.
                 </p>
                 <Link
                   to="/"
@@ -110,20 +157,26 @@ export default function UserDashboard() {
                     <h3 className="text-xl font-semibold text-gray-900 mb-3">
                       {reservation.parking_nom || "Parking"}
                     </h3>
-                    
+
                     <div className="space-y-2 mb-4">
                       <p className="text-gray-600 text-sm">
                         {reservation.date_debut && reservation.date_fin
-                          ? `${new Date(reservation.date_debut).toLocaleDateString('fr-FR')} - ${new Date(reservation.date_fin).toLocaleDateString('fr-FR')}`
+                          ? `${new Date(
+                              reservation.date_debut
+                            ).toLocaleDateString("fr-FR")} - ${new Date(
+                              reservation.date_fin
+                            ).toLocaleDateString("fr-FR")}`
                           : "Date non spécifiée"}
                       </p>
                       <p className="text-gray-700">
-                        <span className="font-medium">Statut:</span>{" "}
-                        <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${
-                          reservation.statut === 'confirmée' 
-                            ? 'bg-green-100 text-green-800' 
-                            : 'bg-yellow-100 text-yellow-800'
-                        }`}>
+                        <span className="font-medium">Statut :</span>{" "}
+                        <span
+                          className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${
+                            reservation.statut === "confirmée"
+                              ? "bg-green-100 text-green-800"
+                              : "bg-yellow-100 text-yellow-800"
+                          }`}
+                        >
                           {reservation.statut || "En attente"}
                         </span>
                       </p>
@@ -133,7 +186,7 @@ export default function UserDashboard() {
                         </p>
                       )}
                     </div>
-                    
+
                     <Link
                       to={`/parking/${reservation.parking_id}`}
                       className="block w-full text-center bg-gray-100 text-gray-900 py-2 rounded-xl hover:bg-gray-200 transition font-medium"
@@ -152,7 +205,7 @@ export default function UserDashboard() {
               <h2 className="text-3xl font-serif font-normal mb-6 text-gray-900">
                 Stationnements actifs
               </h2>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {stationnements.map((stationnement) => (
                   <div
@@ -168,10 +221,13 @@ export default function UserDashboard() {
                         <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
                       </span>
                     </div>
-                    
+
                     <p className="text-gray-600 text-sm">
-                      Début: {stationnement.date_debut
-                        ? new Date(stationnement.date_debut).toLocaleString('fr-FR')
+                      Début :{" "}
+                      {stationnement.date_debut
+                        ? new Date(
+                            stationnement.date_debut
+                          ).toLocaleString("fr-FR")
                         : "N/A"}
                     </p>
                   </div>

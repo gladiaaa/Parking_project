@@ -11,6 +11,9 @@ final class User
         private string $passwordHash,
         private string $role = 'USER',
 
+        private ?string $firstname = null,
+        private ?string $lastname = null,
+
         // Config 2FA
         private bool $twoFactorEnabled = true,
         // 'email' | 'sms' | 'totp'
@@ -52,6 +55,14 @@ final class User
         return $this->role;
     }
 
+    public function firstname(): ?string
+    {
+        return $this->firstname;
+    }
+    public function lastname(): ?string
+    {
+        return $this->lastname;
+    }
     // ====================
     // 2FA - configuration
     // ====================

@@ -9,35 +9,37 @@ use App\Infrastructure\Security\PasswordHasher;
 final class RegisterUser
 {
     public function __construct(
-        private UserRepository $userRepository,
-        private PasswordHasher $passwordHasher,
-    ) {
-    }
+        private UserRepository $repo,
+        private PasswordHasher $hasher
+    ) {}
 
-    public function execute(string $email, string $plainPassword): array
-    {
-        $email = trim(strtolower($email));
-
-        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            throw new \InvalidArgumentException('Invalid email');
+    public function execute(
+        string $email,
+        string $password,
+        string $role= 'USER',
+        ?string $firstname,
+        ?string $lastname
+    ): array {
+        if ($this->repo->findByEmail($email)) {
+            throw new \RuntimeException("Email already in use");
         }
 
-        if (strlen($plainPassword) < 8) {
-            throw new \InvalidArgumentException('Password too short');
-        }
+        $hash = $this->hasher->hash($password);
 
-        if ($this->userRepository->findByEmail($email)) {
-            throw new \RuntimeException('Email already used');
-        }
-
-        $hash = $this->passwordHasher->hash($plainPassword);
-
-        $user = $this->userRepository->create($email, $hash, 'USER');
+        $user = $this->repo->create(
+            $email,
+            $hash,
+            $role,
+            $firstname,
+            $lastname
+        );
 
         return [
-            'id'    => $user->id(),
+            'id' => $user->id(),
             'email' => $user->email(),
-            'role'  => $user->role(),
+            'firstname' => $user->firstname(),
+            'lastname' => $user->lastname(),
+            'role' => $user->role(),
         ];
     }
 }
