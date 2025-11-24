@@ -4,25 +4,47 @@ declare(strict_types=1);
 namespace App\UseCase\Auth;
 
 use App\Domain\Repository\UserRepository;
-use App\Infrastructure\Security\JwtManager;
 
-final class StartTwoFactor {
-  public function __construct(private UserRepository $users, private JwtManager $jwt) {}
+final class StartTwoFactor
+{
+    public function __construct(
+        private UserRepository $userRepository,
+        private Mailer $mailer,
+        private SmsSender $smsSender
+    ) {}
 
-  /** Retourne true si OTP émis et cookie P2_AUTH posé */
-  public function __invoke(string $email): bool {
-    $u = $this->users->findByEmail($email);
-    if (!$u) return false;
-    $code = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
-    $exp  = new \DateTimeImmutable('+5 minutes');
-    $u2   = $u->with2FACode($code, $exp);
-    $this->users->save2FA($u2);
+    public function execute(int $userId): void
+    {
+        $user = $this->userRepository->findById($userId);
 
-    // DEV: on "émule" l'envoi (log). En prod: mail/SMS via provider.
-    error_log("[2FA] code for {$u->email()}: $code (valid jusqu'à ".$exp->format('H:i:s').")");
+        if (!$user) {
+            throw new \RuntimeException('User not found');
+        }
 
-    $p2 = $this->jwt->issuePending2FAToken($u->id());
-    $this->jwt->setPending2FACookie($p2);
-    return true;
-  }
+        $method = $user->twoFactorMethod();
+
+        // TOTP : pas de code à générer, l’app TOTP a déjà le secret
+        if ($method === 'totp') {
+            return;
+        }
+
+        $code = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+        $expiresAt = (new \DateTimeImmutable())->modify('+5 minutes');
+
+        // User est immuable -> on récupère la nouvelle instance
+        $user = $user->with2FACode($code, $expiresAt);
+        $this->userRepository->save($user);
+
+        if ($method === 'email') {
+            $this->mailer->sendTwoFactorCodeEmail($user->email(), $code);
+        } elseif ($method === 'sms') {
+            $phone = $user->twoFactorPhone();
+            if ($phone === null) {
+                throw new \RuntimeException('User has no phone number for SMS 2FA');
+            }
+            $this->smsSender->sendTwoFactorSms($phone, $code);
+        } else {
+            throw new \RuntimeException('Unknown 2FA method: '.$method);
+        }
+    }
 }

@@ -6,25 +6,65 @@ namespace App\UseCase\Auth;
 use App\Domain\Repository\UserRepository;
 use App\Infrastructure\Security\JwtManager;
 
-final class VerifyTwoFactor {
-  public function __construct(private UserRepository $users, private JwtManager $jwt) {}
+final class VerifyTwoFactor
+{
+  public function __construct(
+    private UserRepository $userRepository,
+    private JwtManager $jwtManager,
+    private TotpVerifier $totpVerifier
+  ) {
+  }
 
-  /** @return array{access:string,refresh:string}|null */
-  public function __invoke(string $code): ?array {
-    $p2 = $this->jwt->readPending2FA();
-    if (!$p2 || ($p2['typ'] ?? '') !== 'p2') return null;
-    $u = $this->users->findById((int)$p2['sub']);
-    if (!$u || !$u->twoFactorEnabled()) return null;
+  public function execute(int $userId, string $code): array
+  {
+    $user = $this->userRepository->findById($userId);
 
-    if (!$u->twoFactorLastCode() || !$u->twoFactorExpiresAt() || $u->twoFactorExpiresAt() < new \DateTimeImmutable()) {
-      return null;
+    if (!$user) {
+      throw new \RuntimeException('User not found');
     }
-    if (trim($code) !== $u->twoFactorLastCode()) return null;
 
-    // OK -> tokens finaux
-    return (new class($this->jwt) {
-      public function __construct(private JwtManager $jwt) {}
-      public function issue(int $uid, string $role): array { return $this->jwt->issueFor($uid, $role); }
-    })->issue($u->id(), $u->role());
+    $method = $user->twoFactorMethod();
+    $now = new \DateTimeImmutable();
+
+    $valid = false;
+
+    if ($method === 'email' || $method === 'sms') {
+      // helper du domaine
+      $valid = $user->hasValid2FACode($code, $now);
+    } elseif ($method === 'totp') {
+      if (!$user->hasTotpConfigured()) {
+        throw new \RuntimeException('TOTP not configured');
+      }
+
+      $secret = $user->twoFactorTotpSecret();
+      if ($secret === null) {
+        throw new \RuntimeException('Missing TOTP secret');
+      }
+
+      $valid = $this->totpVerifier->verify($secret, $code);
+    } else {
+      throw new \RuntimeException('Unknown 2FA method: ' . $method);
+    }
+
+    if (!$valid) {
+      throw new \RuntimeException('Invalid 2FA code');
+    }
+
+    // Nettoyer le challenge pour email/sms
+    if ($method === 'email' || $method === 'sms') {
+      $user = $user->clear2FA();
+      $this->userRepository->save($user);
+    }
+
+    // Génération des JWT
+    [$accessToken, $refreshToken] = $this->jwtManager->issueFor(
+      $user->id(),
+      $user->role()
+    );
+
+    return [
+      'access_token' => $accessToken,
+      'refresh_token' => $refreshToken,
+    ];
   }
 }

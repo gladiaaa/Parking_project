@@ -5,29 +5,44 @@ namespace App\UseCase\Auth;
 
 use App\Domain\Repository\UserRepository;
 use App\Infrastructure\Security\PasswordHasher;
-use App\Infrastructure\Security\JwtManager;
 
-final class LoginUser {
-  public function __construct(
-    private UserRepository $users,
-    private PasswordHasher $hasher,
-    private JwtManager $jwt
-  ) {}
+final class LoginUser
+{
+    public function __construct(
+        private UserRepository $users,
+        private PasswordHasher $hasher,
+    ) {}
 
-  /** @return array{access:string, refresh:string}|array{p2:true} */
-  public function __invoke(string $email, string $password): array {
-    $u = $this->users->findByEmail($email);
-    if (!$u || !$this->hasher->verify($password, $u->passwordHash())) {
-      throw new \RuntimeException('Invalid credentials');
+    /**
+     * Retourne :
+     * - en cas d'échec : ['success' => false]
+     * - en cas de succès sans 2FA :
+     *   ['success' => true, 'two_factor_required' => false, 'user_id' => int, 'role' => string]
+     * - en cas de succès avec 2FA :
+     *   ['success' => true, 'two_factor_required' => true, 'user_id' => int, 'role' => string]
+     */
+    public function execute(string $email, string $password): array
+    {
+        $u = $this->users->findByEmail($email);
+
+        if (!$u || !$this->hasher->verify($password, $u->passwordHash())) {
+            return ['success' => false];
+        }
+
+        if ($u->twoFactorEnabled()) {
+            return [
+                'success'             => true,
+                'two_factor_required' => true,
+                'user_id'             => $u->id(),
+                'role'                => $u->role(),
+            ];
+        }
+
+        return [
+            'success'             => true,
+            'two_factor_required' => false,
+            'user_id'             => $u->id(),
+            'role'                => $u->role(),
+        ];
     }
-
-    // 2FA activée -> phase 2
-    if ($u->twoFactorEnabled()) {
-      return ['p2'=>true];
-    }
-
-    // Sinon tokens directs
-    [$a, $r] = $this->jwt->issueFor($u->id(), $u->role());
-    return ['access'=>$a,'refresh'=>$r];
-  }
 }

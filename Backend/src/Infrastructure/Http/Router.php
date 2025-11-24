@@ -4,7 +4,7 @@ declare(strict_types=1);
 namespace App\Infrastructure\Http;
 
 use ReflectionMethod;
-use App\Infrastructure\Http\IsGranted; // <— ajoute ceci
+use App\Infrastructure\Http\IsGranted; 
 
 final class Router
 {
@@ -39,7 +39,9 @@ final class Router
                 $guard = $a->newInstance();
                 $guard->assert();
             }
+            
         }
+        
         call_user_func($handler);
     }
 }

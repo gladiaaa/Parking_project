@@ -64,6 +64,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   <title>Login Parking App</title>
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'">
   <style>
+    .link{
+  margin-top:12px;
+  font-size:13px;
+  text-align:center;
+}
+.link a{
+  color:#ff5722;
+  text-decoration:none;
+}
+.link a:hover{
+  text-decoration:underline;
+}
+
     body{font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif;background:#f5f5f5;display:flex;align-items:center;justify-content:center;height:100vh}
     form{background:#fff;padding:24px 32px;border-radius:12px;box-shadow:0 8px 20px rgba(0,0,0,.1);width:320px}
     h1{text-align:center;color:#ff5722;margin-bottom:20px;font-weight:800}
@@ -82,7 +95,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <input id="email" name="email" type="email" placeholder="adresse@email.com" autocomplete="email" required>
     <label for="pwd">Mot de passe</label>
     <input id="pwd" name="password" type="password" placeholder="••••••••" autocomplete="current-password" required>
-    <button type="submit">Se connecter</button>
+<button type="submit">Se connecter</button>
+
+<div class="link">
+  Pas encore de compte ?
+  <a href="/register.php">Créer un compte</a>
+</div>
+
 
     <?php if ($response): ?>
       <div class="msg"><?= htmlspecialchars(json_encode($response, JSON_PRETTY_PRINT|JSON_UNESCAPED_UNICODE)) ?></div>
