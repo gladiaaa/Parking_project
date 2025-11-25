@@ -1,0 +1,52 @@
+import React from "react";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import Home from "./pages/Home.jsx";
+import Login from "./pages/Login.jsx";
+import Register from "./pages/Register.jsx";
+import UserDashboard from "./pages/UserDashboard.jsx";
+import OwnerDashboard from "./pages/OwnerDashboard.jsx";
+import ParkingDetails from "./pages/ParkingDetails.jsx";
+import ProtectedRoute from "./components/ProtectedRoute.jsx";
+
+function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        {/* Routes publiques */}
+        <Route path="/" element={<Home />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+
+        {/* Routes protégées */}
+        <Route
+          path="/dashboard-user"
+          element={
+            <ProtectedRoute role="user">
+              <UserDashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dashboard-owner"
+          element={
+            <ProtectedRoute role="owner">
+              <OwnerDashboard />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Route publique pour les détails de parking */}
+        <Route path="/parking/:id" element={<ParkingDetails />} />
+
+        {/* Redirection pour les routes obsolètes */}
+        <Route path="/dashboard" element={<Navigate to="/dashboard-user" replace />} />
+        <Route path="/owner" element={<Navigate to="/dashboard-owner" replace />} />
+
+        {/* Route 404 */}
+        <Route path="*" element={<Navigate to="/" />} />
+      </Routes>
+    </BrowserRouter>
+  );
+}
+
+export default App;
