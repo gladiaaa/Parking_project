@@ -1,14 +1,27 @@
 import React, { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
 import LoadingScreen from "../components/LoadingScreen";
 
 export default function Home() {
+  const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(true);
+  const [searchForm, setSearchForm] = useState({
+    ville: '',
+    vehicule: 'Voiture',
+    dateDebut: '',
+    dateFin: ''
+  });
 
   const handleLoadingComplete = () => {
     setIsLoading(false);
+  };
+
+  const handleSearchSubmit = (e) => {
+    e.preventDefault();
+    // Rediriger vers la page de réservation avec les paramètres de recherche
+    navigate('/reservation', { state: searchForm });
   };
 
   return (
@@ -47,13 +60,15 @@ export default function Home() {
                   </div>
 
                   {/* Champs de recherche */}
-                  <form className="space-y-3">
+                  <form onSubmit={handleSearchSubmit} className="space-y-3">
                     {/* Où */}
                     <div className="relative">
                       <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-lg">📍</span>
                       <input
                         type="text"
                         placeholder="Où cherchez-vous un parking ?"
+                        value={searchForm.ville}
+                        onChange={(e) => setSearchForm({ ...searchForm, ville: e.target.value })}
                         className="w-full pl-11 pr-3 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-gray-800 text-sm"
                       />
                     </div>
@@ -61,32 +76,36 @@ export default function Home() {
                     {/* Type de véhicule */}
                     <div className="relative">
                       <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-lg">🚗</span>
-                      <input
-                        type="text"
-                        placeholder="Type de véhicule"
-                        className="w-full pl-11 pr-3 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-gray-800 text-sm"
-                      />
+                      <select
+                        value={searchForm.vehicule}
+                        onChange={(e) => setSearchForm({ ...searchForm, vehicule: e.target.value })}
+                        className="w-full pl-11 pr-3 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-gray-800 text-sm appearance-none"
+                      >
+                        <option value="Voiture">Voiture</option>
+                        <option value="Moto">Moto</option>
+                        <option value="Vélo">Vélo</option>
+                        <option value="Trottinette">Trottinette</option>
+                      </select>
                     </div>
 
                     {/* Dates */}
-                    <div className="grid grid-cols-7 gap-2 items-center">
-                      <div className="relative col-span-3">
-                        <span className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400 text-base">📅</span>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="relative">
+                        <span className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400 text-base z-10">📅</span>
                         <input
-                          type="text"
-                          defaultValue="20/11/2025 17:30"
-                          className="w-full pl-8 pr-1 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-gray-800 text-xs"
+                          type="datetime-local"
+                          value={searchForm.dateDebut}
+                          onChange={(e) => setSearchForm({ ...searchForm, dateDebut: e.target.value })}
+                          className="w-full pl-8 pr-2 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-gray-800 text-xs"
                         />
                       </div>
-                      <div className="col-span-1 flex justify-center">
-                        <span className="text-gray-400 text-lg">→</span>
-                      </div>
-                      <div className="relative col-span-3">
-                        <span className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400 text-base">📅</span>
+                      <div className="relative">
+                        <span className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400 text-base z-10">📅</span>
                         <input
-                          type="text"
-                          defaultValue="20/11/2025 18:30"
-                          className="w-full pl-8 pr-1 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-gray-800 text-xs"
+                          type="datetime-local"
+                          value={searchForm.dateFin}
+                          onChange={(e) => setSearchForm({ ...searchForm, dateFin: e.target.value })}
+                          className="w-full pl-8 pr-2 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-gray-800 text-xs"
                         />
                       </div>
             </div>
@@ -351,7 +370,10 @@ export default function Home() {
                   ParkingPartagé simplifie votre stationnement au quotidien. Que ce soit pour vos courses, un rendez-vous ou vos déplacements professionnels.
                 </p>
                 
-                <button className="inline-flex items-center gap-2 bg-primary text-white px-8 py-3.5 rounded-full hover:bg-primary-800 transition-all duration-300 font-light text-sm shadow-md hover:shadow-xl hover:-translate-y-0.5 group">
+                <button
+                  onClick={() => navigate('/reservation')}
+                  className="inline-flex items-center gap-2 bg-primary text-white px-8 py-3.5 rounded-full hover:bg-primary-800 transition-all duration-300 font-light text-sm shadow-md hover:shadow-xl hover:-translate-y-0.5 group"
+                >
                   <span>Découvrir l'offre</span>
                   <svg className="w-4 h-4 group-hover:translate-x-1 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"/>
@@ -485,7 +507,10 @@ export default function Home() {
                   </div>
                 </div>
                 
-                <button className="inline-flex items-center gap-2 bg-gray-900 text-white px-6 py-3 rounded-full hover:bg-gray-800 transition-all duration-300 font-light text-sm shadow-lg group">
+                <button
+                  onClick={() => navigate('/reservation')}
+                  className="inline-flex items-center gap-2 bg-gray-900 text-white px-6 py-3 rounded-full hover:bg-gray-800 transition-all duration-300 font-light text-sm shadow-lg group"
+                >
                   <span>Découvrir nos parkings</span>
                   <svg className="w-4 h-4 group-hover:translate-x-1 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"/>
