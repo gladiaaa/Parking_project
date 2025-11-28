@@ -19,14 +19,27 @@ const MesReservations = () => {
     try {
       const token = localStorage.getItem('token');
       if (!token) {
+        alert('❌ Vous devez être connecté pour voir vos réservations');
         navigate('/login');
         return;
       }
 
       const response = await apiService.getReservations(token);
-      setReservations(response.reservations);
+      if (response.success) {
+        setReservations(response.reservations || []);
+      } else {
+        alert('❌ Erreur lors du chargement des réservations');
+      }
     } catch (error) {
       console.error('Erreur chargement réservations:', error);
+      if (error.message.includes('Utilisateur non trouvé') || error.message.includes('Token')) {
+        alert('❌ Session expirée. Veuillez vous reconnecter.');
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        navigate('/login');
+      } else {
+        alert('❌ Erreur: ' + error.message);
+      }
     } finally {
       setLoading(false);
     }
@@ -156,6 +169,7 @@ const MesReservations = () => {
                   reservation={reservation}
                   statusBadge={getStatusBadge(reservation)}
                   formatDate={formatDate}
+                  onCancel={loadReservations}
                 />
               ))}
             </div>
@@ -168,8 +182,30 @@ const MesReservations = () => {
 };
 
 // Composant carte de réservation
-const ReservationCard = ({ reservation, statusBadge, formatDate }) => {
+const ReservationCard = ({ reservation, statusBadge, formatDate, onCancel }) => {
   const [showDetails, setShowDetails] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  
+  const handleCancel = async () => {
+    if (!window.confirm('Êtes-vous sûr de vouloir annuler cette réservation ?')) {
+      return;
+    }
+    
+    setCancelling(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await apiService.cancelReservation(token, reservation.id);
+      
+      if (response.success) {
+        alert(`✅ ${response.message}\n\nVotre place a été libérée et est maintenant disponible pour d'autres utilisateurs.`);
+        onCancel(); // Recharger les réservations
+      }
+    } catch (error) {
+      alert('❌ ' + error.message);
+    } finally {
+      setCancelling(false);
+    }
+  };
 
   return (
     <div className="bg-white rounded-3xl border border-gray-200 overflow-hidden hover:shadow-xl transition-all duration-500">
@@ -183,10 +219,12 @@ const ReservationCard = ({ reservation, statusBadge, formatDate }) => {
               {statusBadge}
             </div>
             <p className="text-gray-500 mb-2">
-              📍 {reservation.adresse || 'Adresse non disponible'}
+              📍 {reservation.parking_adresse || 'Adresse non disponible'}
             </p>
-            <p className="text-gray-400 text-sm">
-              Réservation #{reservation.id}
+            <p className="text-gray-400 text-sm flex items-center gap-3">
+              <span>Réservation #{reservation.id}</span>
+              {reservation.vehicule && <span>🚗 {reservation.vehicule}</span>}
+              {reservation.immatriculation && <span>🔖 {reservation.immatriculation}</span>}
             </p>
           </div>
           <div className="text-right">
@@ -223,9 +261,11 @@ const ReservationCard = ({ reservation, statusBadge, formatDate }) => {
           </button>
           {reservation.statut !== 'annulée' && new Date(reservation.date_debut) > new Date() && (
             <button
-              className="flex-1 py-3 bg-red-50 text-red-600 rounded-xl font-medium hover:bg-red-100 transition-all"
+              onClick={handleCancel}
+              disabled={cancelling}
+              className="flex-1 py-3 bg-red-50 text-red-600 rounded-xl font-medium hover:bg-red-100 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Annuler
+              {cancelling ? 'Annulation...' : 'Annuler la réservation'}
             </button>
           )}
         </div>

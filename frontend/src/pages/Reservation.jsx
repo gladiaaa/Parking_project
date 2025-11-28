@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { apiService } from '../services/apiService';
+import Header from '../components/Header';
+import Footer from '../components/Footer';
 
 const Reservation = () => {
   const navigate = useNavigate();
@@ -22,14 +24,14 @@ const Reservation = () => {
 
   // Filtres avancés
   const [filters, setFilters] = useState({
-    prixMax: 100,
-    noteMin: 0,
+    prixMax: 10, // Prix max par défaut assez élevé pour voir tous les parkings
+    noteMin: 0, // Note min à 0 pour voir tous les parkings
     services: []
   });
 
   const [showFilters, setShowFilters] = useState(false);
 
-  // Charger les parkings au montage
+  // Charger les parkings au montage (toujours)
   useEffect(() => {
     loadParkings();
   }, []);
@@ -42,33 +44,43 @@ const Reservation = () => {
   const loadParkings = async () => {
     setLoading(true);
     try {
-      const response = await apiService.searchParkings(searchParams);
-      setParkings(response.parkings);
-      setFilteredParkings(response.parkings);
+      const params = {
+        ...searchParams,
+        dateDebut: searchParams.dateDebut || undefined,
+        dateFin: searchParams.dateFin || undefined
+      };
+      const response = await apiService.searchParkings(params);
+      console.log('✅ Parkings chargés:', response.parkings.length);
+      setParkings(response.parkings || []);
+      // Appliquer les filtres après le chargement
+      setTimeout(() => {
+        applyFiltersToResults(response.parkings || []);
+      }, 100);
     } catch (error) {
-      console.error('Erreur chargement parkings:', error);
+      console.error('❌ Erreur chargement parkings:', error);
+      setParkings([]);
+      setFilteredParkings([]);
     } finally {
       setLoading(false);
     }
   };
 
-  const applyFilters = () => {
-    let results = [...parkings];
-
-    // Filtre prix
+  const applyFiltersToResults = (parkingsList) => {
+    let results = [...parkingsList];
     results = results.filter(p => p.tarif_horaire <= filters.prixMax);
-
-    // Filtre note
     results = results.filter(p => p.note >= filters.noteMin);
-
-    // Filtre services
     if (filters.services.length > 0) {
       results = results.filter(p =>
         filters.services.every(service => p.services.includes(service))
       );
     }
-
+    console.log('✅ Parkings filtrés:', results.length);
     setFilteredParkings(results);
+  };
+
+  const applyFilters = () => {
+    if (parkings.length === 0) return;
+    applyFiltersToResults(parkings);
   };
 
   const handleSearch = () => {
@@ -86,239 +98,207 @@ const Reservation = () => {
   };
 
   const calculatePrice = (parking) => {
-    if (!searchParams.dateDebut || !searchParams.dateFin) return parking.tarif_horaire;
-
+    if (!searchParams.dateDebut || !searchParams.dateFin) {
+      return parking.tarif_horaire.toFixed(2) + '/h';
+    }
     const debut = new Date(searchParams.dateDebut);
     const fin = new Date(searchParams.dateFin);
-    const heures = Math.ceil((fin - debut) / (1000 * 60 * 60));
-
-    if (heures <= 24) {
+    const diffMs = fin - debut;
+    const diffMinutes = diffMs / (1000 * 60);
+    const diffHeures = diffMinutes / 60;
+    const diffJours = diffHeures / 24;
+    if (diffJours < 1) {
+      const heures = Math.ceil(diffHeures);
       return (heures * parking.tarif_horaire).toFixed(2);
-    } else {
-      const jours = Math.ceil(heures / 24);
+    }
+    if (diffJours <= 30) {
+      const jours = Math.ceil(diffJours);
       return (jours * parking.tarif_journalier).toFixed(2);
     }
+    const mois = Math.ceil(diffJours / 30);
+    return (mois * parking.tarif_mensuel).toFixed(2);
   };
 
   const servicesDisponibles = ['Couvert', 'Gardé', 'Sécurisé', 'Vidéo-surveillance', 'Bornes électriques', 'Lavage auto', 'Accessible PMR'];
 
   return (
-    <div className="min-h-screen bg-white pt-24 pb-20">
-      {/* Hero Search Section - Style Apple/Tesla */}
-      <div className="bg-gradient-to-br from-gray-50 to-white border-b border-gray-100">
-        <div className="max-w-7xl mx-auto px-6 py-16">
-          {/* Titre minimaliste */}
-          <div className="text-center mb-12">
-            <h1 className="text-5xl md:text-6xl font-light text-gray-900 tracking-tight mb-4">
-              Trouvez votre place
-            </h1>
-            <p className="text-xl text-gray-500 font-light">
-              Simple. Rapide. Intelligent.
-            </p>
-          </div>
+    <>
+      <Header />
+      <div className="min-h-screen bg-white">
+        {/* Hero Section Ultra-Minimaliste */}
+        <div className="relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-br from-gray-50 via-white to-gray-50"></div>
+          <div className="relative max-w-6xl mx-auto px-6 py-20">
+            <div className="text-center mb-16">
+              <h1 className="text-6xl md:text-7xl font-extralight text-gray-900 tracking-tighter mb-6">
+                Trouvez votre place
+              </h1>
+              <p className="text-xl text-gray-400 font-light tracking-wide">
+                Réservez en quelques secondes
+              </p>
+            </div>
 
-          {/* Barre de recherche ultra-moderne */}
-          <div className="max-w-5xl mx-auto">
-            <div className="bg-white rounded-3xl shadow-xl border border-gray-200 p-3">
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                {/* Ville */}
-                <div className="relative">
+            {/* Barre de recherche ultra-épurée */}
+            <div className="max-w-4xl mx-auto">
+              <div className="bg-white/80 backdrop-blur-xl rounded-2xl border border-gray-200/50 shadow-2xl p-1">
+                <div className="grid grid-cols-1 md:grid-cols-5 gap-1">
                   <input
                     type="text"
                     placeholder="Où ?"
                     value={searchParams.ville}
                     onChange={(e) => setSearchParams({ ...searchParams, ville: e.target.value })}
-                    className="w-full px-6 py-4 bg-gray-50 rounded-2xl border-0 focus:bg-white focus:ring-2 focus:ring-primary transition-all text-gray-900 placeholder-gray-400"
+                    className="px-6 py-5 bg-transparent rounded-xl border-0 focus:outline-none focus:ring-0 text-gray-900 placeholder-gray-400 text-lg font-light"
                   />
-                </div>
-
-                {/* Type véhicule */}
-                <div className="relative">
                   <select
                     value={searchParams.vehicule}
                     onChange={(e) => setSearchParams({ ...searchParams, vehicule: e.target.value })}
-                    className="w-full px-6 py-4 bg-gray-50 rounded-2xl border-0 focus:bg-white focus:ring-2 focus:ring-primary transition-all text-gray-900 appearance-none"
+                    className="px-6 py-5 bg-transparent rounded-xl border-0 focus:outline-none focus:ring-0 text-gray-900 text-lg font-light appearance-none"
                   >
                     <option value="Voiture">🚗 Voiture</option>
                     <option value="Moto">🏍️ Moto</option>
                     <option value="Vélo">🚲 Vélo</option>
                     <option value="Trottinette">🛴 Trottinette</option>
                   </select>
-                </div>
-
-                {/* Date début */}
-                <div className="relative">
                   <input
                     type="datetime-local"
                     value={searchParams.dateDebut}
                     onChange={(e) => setSearchParams({ ...searchParams, dateDebut: e.target.value })}
-                    className="w-full px-6 py-4 bg-gray-50 rounded-2xl border-0 focus:bg-white focus:ring-2 focus:ring-primary transition-all text-gray-900"
+                    className="px-6 py-5 bg-transparent rounded-xl border-0 focus:outline-none focus:ring-0 text-gray-900 text-lg font-light"
                   />
-                </div>
-
-                {/* Date fin */}
-                <div className="relative">
                   <input
                     type="datetime-local"
                     value={searchParams.dateFin}
                     onChange={(e) => setSearchParams({ ...searchParams, dateFin: e.target.value })}
-                    className="w-full px-6 py-4 bg-gray-50 rounded-2xl border-0 focus:bg-white focus:ring-2 focus:ring-primary transition-all text-gray-900"
+                    className="px-6 py-5 bg-transparent rounded-xl border-0 focus:outline-none focus:ring-0 text-gray-900 text-lg font-light"
                   />
-                </div>
-              </div>
-
-              {/* Bouton recherche */}
-              <button
-                onClick={handleSearch}
-                className="w-full mt-3 bg-gray-900 text-white py-5 rounded-2xl font-medium hover:bg-gray-800 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
-              >
-                Rechercher
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Contenu principal */}
-      <div className="max-w-7xl mx-auto px-6 py-12">
-        <div className="flex flex-col lg:flex-row gap-8">
-          {/* Sidebar Filtres - Style minimaliste */}
-          <div className="lg:w-80 flex-shrink-0">
-            <div className="sticky top-28">
-              {/* Toggle filtres mobile */}
-              <button
-                onClick={() => setShowFilters(!showFilters)}
-                className="lg:hidden w-full mb-4 px-6 py-3 bg-gray-100 rounded-2xl text-gray-900 font-medium"
-              >
-                {showFilters ? 'Masquer les filtres' : 'Afficher les filtres'}
-              </button>
-
-              <div className={`space-y-6 ${showFilters ? 'block' : 'hidden lg:block'}`}>
-                {/* Tri */}
-                <div className="bg-white rounded-3xl p-6 border border-gray-100">
-                  <h3 className="text-lg font-medium text-gray-900 mb-4">Trier par</h3>
-                  <div className="space-y-2">
-                    {[
-                      { value: 'distance', label: 'Distance' },
-                      { value: 'prix_asc', label: 'Prix croissant' },
-                      { value: 'prix_desc', label: 'Prix décroissant' },
-                      { value: 'note', label: 'Meilleures notes' }
-                    ].map(option => (
-                      <button
-                        key={option.value}
-                        onClick={() => setSearchParams({ ...searchParams, sort: option.value })}
-                        className={`w-full px-4 py-3 rounded-xl text-left transition-all ${
-                          searchParams.sort === option.value
-                            ? 'bg-gray-900 text-white'
-                            : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
-                        }`}
-                      >
-                        {option.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Prix maximum */}
-                <div className="bg-white rounded-3xl p-6 border border-gray-100">
-                  <h3 className="text-lg font-medium text-gray-900 mb-4">Prix max/heure</h3>
-                  <input
-                    type="range"
-                    min="0"
-                    max="10"
-                    step="0.5"
-                    value={filters.prixMax}
-                    onChange={(e) => setFilters({ ...filters, prixMax: parseFloat(e.target.value) })}
-                    className="w-full"
-                  />
-                  <div className="text-center mt-2 text-2xl font-light text-gray-900">
-                    {filters.prixMax}€
-                  </div>
-                </div>
-
-                {/* Note minimum */}
-                <div className="bg-white rounded-3xl p-6 border border-gray-100">
-                  <h3 className="text-lg font-medium text-gray-900 mb-4">Note minimum</h3>
-                  <div className="flex gap-2">
-                    {[0, 3, 4, 4.5].map(note => (
-                      <button
-                        key={note}
-                        onClick={() => setFilters({ ...filters, noteMin: note })}
-                        className={`flex-1 py-2 rounded-xl transition-all ${
-                          filters.noteMin === note
-                            ? 'bg-gray-900 text-white'
-                            : 'bg-gray-50 text-gray-700'
-                        }`}
-                      >
-                        {note === 0 ? 'Tous' : `${note}★`}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Services */}
-                <div className="bg-white rounded-3xl p-6 border border-gray-100">
-                  <h3 className="text-lg font-medium text-gray-900 mb-4">Services</h3>
-                  <div className="space-y-2">
-                    {servicesDisponibles.map(service => (
-                      <label key={service} className="flex items-center gap-3 cursor-pointer group">
-                        <input
-                          type="checkbox"
-                          checked={filters.services.includes(service)}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setFilters({ ...filters, services: [...filters.services, service] });
-                            } else {
-                              setFilters({ ...filters, services: filters.services.filter(s => s !== service) });
-                            }
-                          }}
-                          className="w-5 h-5 rounded border-gray-300 text-gray-900 focus:ring-gray-900"
-                        />
-                        <span className="text-gray-700 group-hover:text-gray-900 transition-colors">
-                          {service}
-                        </span>
-                      </label>
-                    ))}
-                  </div>
+                  <button
+                    onClick={handleSearch}
+                    className="bg-gray-900 text-white py-5 rounded-xl font-light text-lg hover:bg-gray-800 transition-all duration-300 shadow-lg hover:shadow-xl"
+                  >
+                    Rechercher
+                  </button>
                 </div>
               </div>
             </div>
           </div>
+        </div>
 
-          {/* Liste des parkings */}
-          <div className="flex-1">
-            {/* Header résultats */}
-            <div className="flex items-center justify-between mb-8">
-              <h2 className="text-3xl font-light text-gray-900">
-                {filteredParkings.length} {filteredParkings.length > 1 ? 'parkings disponibles' : 'parking disponible'}
-              </h2>
+        {/* Contenu principal */}
+        <div className="max-w-7xl mx-auto px-6 py-12">
+          <div className="flex flex-col lg:flex-row gap-8">
+            {/* Sidebar Filtres - Ultra-minimaliste */}
+            <div className="lg:w-72 flex-shrink-0">
+              <div className="sticky top-28">
+                <button
+                  onClick={() => setShowFilters(!showFilters)}
+                  className="lg:hidden w-full mb-4 px-6 py-3 bg-gray-100 rounded-xl text-gray-900 font-light"
+                >
+                  {showFilters ? 'Masquer' : 'Filtres'}
+                </button>
+
+                <div className={`space-y-4 ${showFilters ? 'block' : 'hidden lg:block'}`}>
+                  {/* Tri */}
+                  <div className="bg-white rounded-2xl p-6 border border-gray-100">
+                    <h3 className="text-sm font-light text-gray-500 mb-4 uppercase tracking-wider">Trier</h3>
+                    <div className="space-y-2">
+                      {[
+                        { value: 'distance', label: 'Distance' },
+                        { value: 'prix_asc', label: 'Prix ↑' },
+                        { value: 'prix_desc', label: 'Prix ↓' },
+                        { value: 'note', label: 'Note' }
+                      ].map(option => (
+                        <button
+                          key={option.value}
+                          onClick={() => setSearchParams({ ...searchParams, sort: option.value })}
+                          className={`w-full px-4 py-2.5 rounded-lg text-left text-sm transition-all ${
+                            searchParams.sort === option.value
+                              ? 'bg-gray-900 text-white'
+                              : 'text-gray-600 hover:bg-gray-50'
+                          }`}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Prix */}
+                  <div className="bg-white rounded-2xl p-6 border border-gray-100">
+                    <h3 className="text-sm font-light text-gray-500 mb-4 uppercase tracking-wider">Prix max</h3>
+                    <input
+                      type="range"
+                      min="0"
+                      max="10"
+                      step="0.5"
+                      value={filters.prixMax}
+                      onChange={(e) => setFilters({ ...filters, prixMax: parseFloat(e.target.value) })}
+                      className="w-full"
+                    />
+                    <div className="text-center mt-3 text-2xl font-extralight text-gray-900">
+                      {filters.prixMax}€
+                    </div>
+                  </div>
+
+                  {/* Services */}
+                  <div className="bg-white rounded-2xl p-6 border border-gray-100">
+                    <h3 className="text-sm font-light text-gray-500 mb-4 uppercase tracking-wider">Services</h3>
+                    <div className="space-y-2">
+                      {servicesDisponibles.map(service => (
+                        <label key={service} className="flex items-center gap-3 cursor-pointer group">
+                          <input
+                            type="checkbox"
+                            checked={filters.services.includes(service)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setFilters({ ...filters, services: [...filters.services, service] });
+                              } else {
+                                setFilters({ ...filters, services: filters.services.filter(s => s !== service) });
+                              }
+                            }}
+                            className="w-4 h-4 rounded border-gray-300 text-gray-900 focus:ring-gray-900"
+                          />
+                          <span className="text-sm text-gray-600 group-hover:text-gray-900 transition-colors">
+                            {service}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
 
-            {/* Chargement */}
-            {loading ? (
-              <div className="flex items-center justify-center py-20">
-                <div className="w-16 h-16 border-4 border-gray-200 border-t-gray-900 rounded-full animate-spin"></div>
+            {/* Liste des parkings */}
+            <div className="flex-1">
+              <div className="flex items-center justify-between mb-8">
+                <h2 className="text-2xl font-extralight text-gray-900">
+                  {filteredParkings.length} {filteredParkings.length > 1 ? 'parkings' : 'parking'}
+                </h2>
               </div>
-            ) : (
-              <div className="space-y-6">
-                {filteredParkings.length === 0 ? (
-                  <div className="text-center py-20">
-                    <div className="text-6xl mb-4">🅿️</div>
-                    <h3 className="text-2xl font-light text-gray-900 mb-2">Aucun parking trouvé</h3>
-                    <p className="text-gray-500">Essayez de modifier vos critères de recherche</p>
-                  </div>
-                ) : (
-                  filteredParkings.map(parking => (
+
+              {loading ? (
+                <div className="flex items-center justify-center py-32">
+                  <div className="w-12 h-12 border-2 border-gray-200 border-t-gray-900 rounded-full animate-spin"></div>
+                </div>
+              ) : filteredParkings.length === 0 ? (
+                <div className="text-center py-32">
+                  <div className="text-7xl mb-6 font-extralight">🅿️</div>
+                  <h3 className="text-2xl font-extralight text-gray-900 mb-3">Aucun parking</h3>
+                  <p className="text-gray-400 font-light">Modifiez vos critères de recherche</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {filteredParkings.map(parking => (
                     <ParkingCard
                       key={parking.id}
                       parking={parking}
                       price={calculatePrice(parking)}
                       onBook={() => handleBooking(parking)}
                     />
-                  ))
-                )}
-              </div>
-            )}
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -336,49 +316,48 @@ const Reservation = () => {
           onSuccess={() => {
             setShowBookingModal(false);
             setSelectedParking(null);
-            navigate('/dashboard');
+            navigate('/mes-reservations');
           }}
         />
       )}
-    </div>
+      <Footer />
+    </>
   );
 };
 
-// Composant ParkingCard ultra-design
+// Composant ParkingCard ultra-minimaliste
 const ParkingCard = ({ parking, price, onBook }) => {
   return (
-    <div className="group bg-white rounded-3xl border border-gray-200 overflow-hidden hover:shadow-2xl transition-all duration-500 hover:-translate-y-1">
+    <div className="group bg-white rounded-2xl border border-gray-200 overflow-hidden hover:border-gray-900 transition-all duration-500 hover:shadow-2xl">
       <div className="flex flex-col md:flex-row">
         {/* Image */}
-        <div className="md:w-80 h-64 md:h-auto bg-gradient-to-br from-gray-100 to-gray-200 relative overflow-hidden">
-          <div className="absolute inset-0 flex items-center justify-center text-6xl">
+        <div className="md:w-64 h-48 md:h-auto bg-gradient-to-br from-gray-100 to-gray-200 relative overflow-hidden">
+          <div className="absolute inset-0 flex items-center justify-center text-7xl font-extralight">
             🅿️
           </div>
-          {/* Badge disponibilité */}
-          <div className="absolute top-4 left-4 bg-white/90 backdrop-blur-sm px-4 py-2 rounded-full text-sm font-medium text-gray-900">
+          <div className="absolute top-4 left-4 bg-white/90 backdrop-blur-sm px-3 py-1.5 rounded-full text-xs font-light text-gray-900">
             {parking.places_disponibles} places
           </div>
-          {/* Badge note */}
-          <div className="absolute top-4 right-4 bg-white/90 backdrop-blur-sm px-4 py-2 rounded-full text-sm font-medium text-gray-900 flex items-center gap-1">
+          <div className="absolute top-4 right-4 bg-white/90 backdrop-blur-sm px-3 py-1.5 rounded-full text-xs font-light text-gray-900 flex items-center gap-1">
             ⭐ {parking.note}
           </div>
         </div>
 
         {/* Contenu */}
         <div className="flex-1 p-8">
-          <div className="flex justify-between items-start mb-4">
+          <div className="flex justify-between items-start mb-6">
             <div>
-              <h3 className="text-2xl font-medium text-gray-900 mb-2">{parking.nom}</h3>
-              <p className="text-gray-500 flex items-center gap-2">
+              <h3 className="text-3xl font-extralight text-gray-900 mb-2">{parking.nom}</h3>
+              <p className="text-gray-400 font-light text-sm mb-1">
                 📍 {parking.adresse}
               </p>
-              <p className="text-gray-400 text-sm mt-1">
-                À {parking.distance} de votre position
+              <p className="text-gray-300 text-xs font-light">
+                {parking.distance}
               </p>
             </div>
             <div className="text-right">
-              <div className="text-4xl font-light text-gray-900">{price}€</div>
-              <div className="text-sm text-gray-500">par session</div>
+              <div className="text-4xl font-extralight text-gray-900 mb-1">{price}€</div>
+              <div className="text-xs text-gray-400 font-light">total</div>
             </div>
           </div>
 
@@ -387,34 +366,19 @@ const ParkingCard = ({ parking, price, onBook }) => {
             {parking.services.slice(0, 4).map(service => (
               <span
                 key={service}
-                className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-full text-sm"
+                className="px-3 py-1 bg-gray-50 text-gray-600 rounded-lg text-xs font-light"
               >
                 {service}
               </span>
             ))}
-            {parking.services.length > 4 && (
-              <span className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-full text-sm">
-                +{parking.services.length - 4}
-              </span>
-            )}
           </div>
 
-          {/* Horaires */}
-          <div className="flex items-center gap-4 mb-6 text-sm text-gray-600">
-            <span className="flex items-center gap-2">
-              🕐 {parking.horaire_ouverture} - {parking.horaire_fermeture}
-            </span>
-            <span className="flex items-center gap-2">
-              🚗 {parking.type_vehicules.join(', ')}
-            </span>
-          </div>
-
-          {/* Bouton réserver */}
+          {/* Bouton */}
           <button
             onClick={onBook}
-            className="w-full bg-gray-900 text-white py-4 rounded-2xl font-medium hover:bg-gray-800 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+            className="w-full bg-gray-900 text-white py-4 rounded-xl font-light hover:bg-gray-800 transition-all duration-300 shadow-lg hover:shadow-xl"
           >
-            Réserver maintenant
+            Réserver
           </button>
         </div>
       </div>
@@ -422,7 +386,7 @@ const ParkingCard = ({ parking, price, onBook }) => {
   );
 };
 
-// Composant Modal de réservation
+// Modal ultra-minimaliste
 const BookingModal = ({ parking, searchParams, price, onClose, onSuccess }) => {
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
@@ -434,6 +398,27 @@ const BookingModal = ({ parking, searchParams, price, onClose, onSuccess }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    const debut = new Date(formData.dateDebut);
+    const fin = new Date(formData.dateFin);
+    const now = new Date();
+    
+    if (debut < now) {
+      alert('❌ La date de début ne peut pas être dans le passé');
+      return;
+    }
+    
+    if (fin <= debut) {
+      alert('❌ La date de fin doit être après la date de début');
+      return;
+    }
+    
+    const diffMinutes = (fin - debut) / (1000 * 60);
+    if (diffMinutes < 30) {
+      alert('❌ Durée minimum: 30 minutes');
+      return;
+    }
+    
     setLoading(true);
 
     try {
@@ -441,26 +426,26 @@ const BookingModal = ({ parking, searchParams, price, onClose, onSuccess }) => {
       const response = await apiService.reserveParking(token, parking.id, {
         date_debut: formData.dateDebut,
         date_fin: formData.dateFin,
-        montant: parseFloat(price)
+        vehicule: formData.vehicule,
+        immatriculation: formData.immatriculation
       });
 
       if (response.success) {
-        alert('✅ Réservation confirmée !');
+        alert(`✅ ${response.message}\n\n💰 ${response.reservation.montant}€`);
         onSuccess();
       }
     } catch (error) {
-      alert('❌ Erreur lors de la réservation: ' + error.message);
+      alert('❌ ' + error.message);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        {/* Header */}
         <div className="sticky top-0 bg-white border-b border-gray-100 px-8 py-6 flex items-center justify-between rounded-t-3xl">
-          <h2 className="text-3xl font-light text-gray-900">Confirmer la réservation</h2>
+          <h2 className="text-3xl font-extralight text-gray-900">Confirmer</h2>
           <button
             onClick={onClose}
             className="w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors flex items-center justify-center text-gray-600"
@@ -470,89 +455,73 @@ const BookingModal = ({ parking, searchParams, price, onClose, onSuccess }) => {
         </div>
 
         <form onSubmit={handleSubmit} className="p-8">
-          {/* Récap parking */}
           <div className="bg-gray-50 rounded-2xl p-6 mb-8">
-            <h3 className="text-xl font-medium text-gray-900 mb-2">{parking.nom}</h3>
-            <p className="text-gray-600 mb-4">📍 {parking.adresse}</p>
+            <h3 className="text-xl font-extralight text-gray-900 mb-2">{parking.nom}</h3>
+            <p className="text-gray-500 font-light mb-4">📍 {parking.adresse}</p>
             <div className="flex items-center justify-between pt-4 border-t border-gray-200">
-              <span className="text-gray-600">Montant total</span>
-              <span className="text-3xl font-light text-gray-900">{price}€</span>
+              <span className="text-gray-500 font-light">Total</span>
+              <span className="text-3xl font-extralight text-gray-900">{price}€</span>
             </div>
           </div>
 
-          {/* Formulaire */}
           <div className="space-y-6">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Date et heure de début
+              <label className="block text-xs font-light text-gray-500 mb-2 uppercase tracking-wider">
+                Début
               </label>
               <input
                 type="datetime-local"
                 required
                 value={formData.dateDebut}
                 onChange={(e) => setFormData({ ...formData, dateDebut: e.target.value })}
-                className="w-full px-6 py-4 bg-gray-50 rounded-2xl border-0 focus:bg-white focus:ring-2 focus:ring-gray-900 transition-all text-gray-900"
+                className="w-full px-6 py-4 bg-gray-50 rounded-xl border-0 focus:bg-white focus:ring-2 focus:ring-gray-900 transition-all text-gray-900 font-light"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Date et heure de fin
+              <label className="block text-xs font-light text-gray-500 mb-2 uppercase tracking-wider">
+                Fin
               </label>
               <input
                 type="datetime-local"
                 required
                 value={formData.dateFin}
                 onChange={(e) => setFormData({ ...formData, dateFin: e.target.value })}
-                className="w-full px-6 py-4 bg-gray-50 rounded-2xl border-0 focus:bg-white focus:ring-2 focus:ring-gray-900 transition-all text-gray-900"
+                className="w-full px-6 py-4 bg-gray-50 rounded-xl border-0 focus:bg-white focus:ring-2 focus:ring-gray-900 transition-all text-gray-900 font-light"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Type de véhicule
+              <label className="block text-xs font-light text-gray-500 mb-2 uppercase tracking-wider">
+                Véhicule
               </label>
               <select
                 required
                 value={formData.vehicule}
                 onChange={(e) => setFormData({ ...formData, vehicule: e.target.value })}
-                className="w-full px-6 py-4 bg-gray-50 rounded-2xl border-0 focus:bg-white focus:ring-2 focus:ring-gray-900 transition-all text-gray-900"
+                className="w-full px-6 py-4 bg-gray-50 rounded-xl border-0 focus:bg-white focus:ring-2 focus:ring-gray-900 transition-all text-gray-900 font-light"
               >
                 {parking.type_vehicules.map(type => (
                   <option key={type} value={type}>{type}</option>
                 ))}
               </select>
             </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Immatriculation (optionnel)
-              </label>
-              <input
-                type="text"
-                placeholder="AA-123-BB"
-                value={formData.immatriculation}
-                onChange={(e) => setFormData({ ...formData, immatriculation: e.target.value.toUpperCase() })}
-                className="w-full px-6 py-4 bg-gray-50 rounded-2xl border-0 focus:bg-white focus:ring-2 focus:ring-gray-900 transition-all text-gray-900 placeholder-gray-400"
-              />
-            </div>
           </div>
 
-          {/* Boutons */}
           <div className="flex gap-4 mt-8">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 py-4 bg-gray-100 text-gray-700 rounded-2xl font-medium hover:bg-gray-200 transition-all"
+              className="flex-1 py-4 bg-gray-100 text-gray-700 rounded-xl font-light hover:bg-gray-200 transition-all"
             >
               Annuler
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="flex-1 py-4 bg-gray-900 text-white rounded-2xl font-medium hover:bg-gray-800 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 py-4 bg-gray-900 text-white rounded-xl font-light hover:bg-gray-800 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? 'Réservation...' : 'Confirmer et payer'}
+              {loading ? 'Réservation...' : 'Confirmer'}
             </button>
           </div>
         </form>
@@ -562,4 +531,3 @@ const BookingModal = ({ parking, searchParams, price, onClose, onSuccess }) => {
 };
 
 export default Reservation;
-

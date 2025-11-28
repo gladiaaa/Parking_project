@@ -38,6 +38,12 @@ export default function Header() {
           >
             Réserver
           </Link>
+          <Link 
+            to="/maps" 
+            className="px-6 py-2.5 text-white font-light text-sm transition-all duration-300 hover:text-gray-300"
+          >
+            Carte
+          </Link>
           <a 
             href="#services" 
             onClick={(e) => {

@@ -25,26 +25,76 @@ export default function Register() {
     e.preventDefault();
     setError("");
     setSuccess("");
+    
+    // Validations côté client
+    if (!form.firstname || !form.lastname || !form.email || !form.password) {
+      setError("Veuillez remplir tous les champs");
+      return;
+    }
+    
+    if (form.firstname.length < 2) {
+      setError("Le prénom doit contenir au moins 2 caractères");
+      return;
+    }
+    
+    if (form.lastname.length < 2) {
+      setError("Le nom doit contenir au moins 2 caractères");
+      return;
+    }
+    
+    if (!form.email.includes('@') || !form.email.includes('.')) {
+      setError("Veuillez entrer une adresse email valide");
+      return;
+    }
+    
+    if (form.password.length < 6) {
+      setError("Le mot de passe doit contenir au moins 6 caractères");
+      return;
+    }
+    
+    if (!form.role) {
+      setError("Veuillez sélectionner un type de compte");
+      return;
+    }
+    
     setLoading(true);
 
     try {
-      const result = await apiService.register(form);
+      // Préparer les données
+      const userData = {
+        firstname: form.firstname.trim(),
+        lastname: form.lastname.trim(),
+        email: form.email.trim().toLowerCase(),
+        password: form.password,
+        role: form.role
+      };
       
-      if (result.success) {
+      const result = await apiService.register(userData);
+      
+      if (result.success && result.token && result.user) {
+        // Sauvegarder dans localStorage
         localStorage.setItem("token", result.token);
         localStorage.setItem("user", JSON.stringify(result.user));
         
-        setSuccess("Compte créé avec succès !");
+        console.log('✅ Token sauvegardé:', result.token);
+        console.log('✅ Utilisateur sauvegardé:', result.user);
+        
+        setSuccess("✅ Compte créé avec succès ! Redirection en cours...");
+        
+        // Redirection selon le rôle
         setTimeout(() => {
           if (result.user.role === 'owner') {
-            navigate("/dashboard-owner");
+            navigate("/dashboard-owner", { replace: true });
           } else {
-            navigate("/dashboard-user");
+            navigate("/dashboard-user", { replace: true });
           }
         }, 1500);
+      } else {
+        setError("Erreur lors de la création du compte. Veuillez réessayer.");
       }
     } catch (err) {
-      setError(err.message || "Erreur lors de l'inscription");
+      console.error('Erreur inscription:', err);
+      setError(err.message || "Erreur lors de l'inscription. Veuillez réessayer.");
     } finally {
       setLoading(false);
     }
@@ -187,14 +237,16 @@ export default function Register() {
               </div>
 
               {success && (
-                <div className="bg-green-50 border border-green-200 text-green-700 px-5 py-4 rounded-2xl text-sm font-light">
-                  {success}
+                <div className="bg-green-50 border border-green-200 text-green-700 px-5 py-4 rounded-2xl text-sm font-light flex items-center gap-2">
+                  <span>✅</span>
+                  <span>{success}</span>
                 </div>
               )}
 
               {error && (
-                <div className="bg-red-50 border border-red-200 text-red-700 px-5 py-4 rounded-2xl text-sm font-light">
-                  {error}
+                <div className="bg-red-50 border border-red-200 text-red-700 px-5 py-4 rounded-2xl text-sm font-light flex items-center gap-2 animate-pulse">
+                  <span>❌</span>
+                  <span>{error}</span>
                 </div>
               )}
 
