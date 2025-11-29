@@ -16,6 +16,23 @@ export default function Login() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
+    
+    // Validation côté client
+    if (!email || !password) {
+      setError("Veuillez remplir tous les champs");
+      return;
+    }
+    
+    if (!email.includes('@')) {
+      setError("Veuillez entrer une adresse email valide");
+      return;
+    }
+    
+    if (password.length < 6) {
+      setError("Le mot de passe doit contenir au moins 6 caractères");
+      return;
+    }
+    
     setLoading(true);
 
     try {
@@ -28,11 +45,22 @@ export default function Login() {
         if (result.user.role === "owner") {
           navigate("/dashboard-owner");
         } else {
-          navigate("/dashboard-user");
+          navigate("/dashboard-user", { replace: true });
         }
+      } else {
+        setError("Erreur lors de la connexion. Veuillez réessayer.");
       }
     } catch (err) {
-      setError(err.message || "Identifiants incorrects");
+      console.error('❌ Erreur connexion:', err);
+      console.error('📧 Email utilisé:', email.trim().toLowerCase());
+      console.error('🔑 Mot de passe utilisé:', password);
+      
+      // Message d'erreur plus détaillé
+      let errorMessage = err.message || "Email ou mot de passe incorrect";
+      if (errorMessage.includes('Email ou mot de passe incorrect')) {
+        errorMessage += "\n\n💡 Vérifiez que vous avez bien créé un compte. Si c'est le cas, vérifiez l'email et le mot de passe dans la console (F12).";
+      }
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -88,8 +116,9 @@ export default function Login() {
               </div>
 
               {error && (
-                <div className="bg-red-50 border border-red-200 text-red-700 px-5 py-4 rounded-2xl text-sm font-light">
-                  {error}
+                <div className="bg-red-50 border border-red-200 text-red-700 px-5 py-4 rounded-2xl text-sm font-light flex items-center gap-2 animate-pulse">
+                  <span>❌</span>
+                  <span>{error}</span>
                 </div>
               )}
 

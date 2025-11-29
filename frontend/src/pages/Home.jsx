@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
 import LoadingScreen from "../components/LoadingScreen";
@@ -8,10 +8,23 @@ import GooglePlayBadge from '../assets/google_play_badge.svg';
 import AppStoreBadge from '../assets/app_store_badge.svg';
 
 export default function Home() {
+  const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(true);
+  const [searchForm, setSearchForm] = useState({
+    ville: '',
+    vehicule: 'Voiture',
+    dateDebut: '',
+    dateFin: ''
+  });
 
   const handleLoadingComplete = () => {
     setIsLoading(false);
+  };
+
+  const handleSearchSubmit = (e) => {
+    e.preventDefault();
+    // Rediriger vers la page de réservation avec les paramètres de recherche
+    navigate('/reservation', { state: searchForm });
   };
 
   return (
@@ -49,50 +62,56 @@ export default function Home() {
                       </button>
                     </div>
 
-                    {/* Champs de recherche */}
-                    <form className="space-y-3">
-                      {/* Où */}
+                  {/* Champs de recherche */}
+                  <form onSubmit={handleSearchSubmit} className="space-y-3">
+                    {/* Où */}
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-lg">📍</span>
+                      <input
+                        type="text"
+                        placeholder="Où cherchez-vous un parking ?"
+                        value={searchForm.ville}
+                        onChange={(e) => setSearchForm({ ...searchForm, ville: e.target.value })}
+                        className="w-full pl-11 pr-3 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-gray-800 text-sm"
+                      />
+                    </div>
+
+                    {/* Type de véhicule */}
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-lg">🚗</span>
+                      <select
+                        value={searchForm.vehicule}
+                        onChange={(e) => setSearchForm({ ...searchForm, vehicule: e.target.value })}
+                        className="w-full pl-11 pr-3 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-gray-800 text-sm appearance-none"
+                      >
+                        <option value="Voiture">Voiture</option>
+                        <option value="Moto">Moto</option>
+                        <option value="Vélo">Vélo</option>
+                        <option value="Trottinette">Trottinette</option>
+                      </select>
+                    </div>
+
+                    {/* Dates */}
+                    <div className="grid grid-cols-2 gap-2">
                       <div className="relative">
-                        <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-lg">📍</span>
+                        <span className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400 text-base z-10">📅</span>
                         <input
-                          type="text"
-                          placeholder="Où cherchez-vous un parking ?"
-                          className="w-full pl-11 pr-3 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-gray-800 text-sm"
+                          type="datetime-local"
+                          value={searchForm.dateDebut}
+                          onChange={(e) => setSearchForm({ ...searchForm, dateDebut: e.target.value })}
+                          className="w-full pl-8 pr-2 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-gray-800 text-xs"
                         />
                       </div>
-
-                      {/* Type de véhicule */}
                       <div className="relative">
-                        <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-lg">🚗</span>
+                        <span className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400 text-base z-10">📅</span>
                         <input
-                          type="text"
-                          placeholder="Type de véhicule"
-                          className="w-full pl-11 pr-3 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-gray-800 text-sm"
+                          type="datetime-local"
+                          value={searchForm.dateFin}
+                          onChange={(e) => setSearchForm({ ...searchForm, dateFin: e.target.value })}
+                          className="w-full pl-8 pr-2 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-gray-800 text-xs"
                         />
                       </div>
-
-                      {/* Dates */}
-                      <div className="grid grid-cols-7 gap-2 items-center">
-                        <div className="relative col-span-3">
-                          <span className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400 text-base">📅</span>
-                          <input
-                            type="text"
-                            defaultValue="20/11/2025 17:30"
-                            className="w-full pl-8 pr-1 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-gray-800 text-xs"
-                          />
-                        </div>
-                        <div className="col-span-1 flex justify-center">
-                          <span className="text-gray-400 text-lg">→</span>
-                        </div>
-                        <div className="relative col-span-3">
-                          <span className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400 text-base">📅</span>
-                          <input
-                            type="text"
-                            defaultValue="20/11/2025 18:30"
-                            className="w-full pl-8 pr-1 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-gray-800 text-xs"
-                          />
-                        </div>
-                      </div>
+            </div>
 
                       {/* Bouton rechercher */}
                       <button
@@ -323,95 +342,68 @@ export default function Home() {
             </div>
           </section>
 
-          {/* SECTION Quote + 3 avantages - ULTRA ORIGINAL & MINIMALISTE */}
-          <section className="relative py-32 bg-white px-6 overflow-hidden">
-            {/* Background gradient subtil */}
-            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[800px] bg-primary/5 rounded-full blur-3xl -z-10"></div>
-
-            <div className="max-w-7xl mx-auto">
-              {/* Layout asymétrique - Quote à gauche, Stats à droite */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-20 items-center mb-24">
-
-                {/* Quote - Côté gauche */}
-                <div className="space-y-8">
-                  {/* Badge minimaliste */}
-                  <div className="inline-flex items-center gap-2 border border-primary/20 rounded-full px-4 py-1.5">
-                    <div className="w-1.5 h-1.5 bg-primary rounded-full animate-pulse"></div>
-                    <span className="text-xs uppercase tracking-wider text-gray-600 font-medium">Simplicité garantie</span>
-                  </div>
-
-                  <h2 className="text-5xl md:text-6xl lg:text-7xl font-serif font-light leading-[1.05] text-gray-900">
-                    Le parking partagé<br />
-                    <span className="italic text-primary/80">repensé pour</span><br />
-                    votre quotidien.
-                  </h2>
-
-                  <p className="text-lg text-gray-600 font-light leading-relaxed max-w-xl">
-                    ParkingPartagé simplifie votre stationnement au quotidien. Que ce soit pour vos courses, un rendez-vous ou vos déplacements professionnels.
-                  </p>
-
-                  <button className="inline-flex items-center gap-2 bg-primary text-white px-8 py-3.5 rounded-full hover:bg-primary-800 transition-all duration-300 font-light text-sm shadow-md hover:shadow-xl hover:-translate-y-0.5 group">
-                    <span>Découvrir l'offre</span>
-                    <svg className="w-4 h-4 group-hover:translate-x-1 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
-                    </svg>
-                  </button>
+        {/* SECTION Quote + 3 avantages - ULTRA ORIGINAL & MINIMALISTE */}
+        <section className="relative py-32 bg-white px-6 overflow-hidden">
+          {/* Background gradient subtil */}
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[800px] bg-primary/5 rounded-full blur-3xl -z-10"></div>
+          
+          <div className="max-w-7xl mx-auto">
+            {/* Layout asymétrique - Quote à gauche, Stats à droite */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-20 items-center mb-24">
+              
+              {/* Quote - Côté gauche */}
+              <div className="space-y-8">
+                {/* Badge minimaliste */}
+                <div className="inline-flex items-center gap-2 border border-primary/20 rounded-full px-4 py-1.5">
+                  <div className="w-1.5 h-1.5 bg-primary rounded-full animate-pulse"></div>
+                  <span className="text-xs uppercase tracking-wider text-gray-600 font-medium">Simplicité garantie</span>
                 </div>
-
-                {/* Métriques - Côté droit */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-gradient-to-br from-primary/5 to-transparent border border-primary/10 rounded-2xl p-6 hover:border-primary/30 transition-all duration-300">
-                    <div className="text-4xl font-light text-primary mb-2">
-
-                      <CountUp
-                        from={0}
-                        to={100}
-                        separator=","
-                        direction="up"
-                        duration={1}
-                        className="count-up-text"
-                      />k+</div>
-                    <div className="text-sm text-gray-700 font-medium">Places</div>
-                    <div className="text-xs text-gray-500 font-light">Disponibles</div>
-                  </div>
-                  <div className="bg-gradient-to-br from-gray-50 to-transparent border border-gray-200 rounded-2xl p-6 hover:border-primary/30 transition-all duration-300">
-                    <div className="text-4xl font-light text-gray-900 mb-2"><CountUp
-                      from={0}
-                      to={6}
-                      separator=","
-                      direction="up"
-                      duration={1}
-                      className="count-up-text"
-                    /> mois</div>
-                    <div className="text-sm text-gray-700 font-medium">Réservation</div>
-                    <div className="text-xs text-gray-500 font-light">À l'avance</div>
-                  </div>
-                  <div className="bg-gradient-to-br from-gray-50 to-transparent border border-gray-200 rounded-2xl p-6 hover:border-primary/30 transition-all duration-300">
-                    <div className="text-4xl font-light text-gray-900 mb-2">-<CountUp
-                      from={0}
-                      to={66}
-                      separator=","
-                      direction="up"
-                      duration={1}
-                      className="count-up-text"
-                    />%</div>
-                    <div className="text-sm text-gray-700 font-medium">Prix</div>
-                    <div className="text-xs text-gray-500 font-light">vs. Voirie</div>
-                  </div>
-                  <div className="bg-gradient-to-br from-primary/5 to-transparent border border-primary/10 rounded-2xl p-6 hover:border-primary/30 transition-all duration-300">
-                    <div className="text-4xl font-light text-primary mb-2"><CountUp
-                      from={0}
-                      to={700}
-                      separator=","
-                      direction="up"
-                      duration={1}
-                      className="count-up-text"
-                    /></div>
-                    <div className="text-sm text-gray-700 font-medium">Villes</div>
-                    <div className="text-xs text-gray-500 font-light">Couvertes</div>
-                  </div>
+                
+                <h2 className="text-5xl md:text-6xl lg:text-7xl font-serif font-light leading-[1.05] text-gray-900">
+                  Le parking partagé<br />
+                  <span className="italic text-primary/80">repensé pour</span><br />
+                  votre quotidien.
+                </h2>
+                
+                <p className="text-lg text-gray-600 font-light leading-relaxed max-w-xl">
+                  ParkingPartagé simplifie votre stationnement au quotidien. Que ce soit pour vos courses, un rendez-vous ou vos déplacements professionnels.
+                </p>
+                
+                <button
+                  onClick={() => navigate('/reservation')}
+                  className="inline-flex items-center gap-2 bg-primary text-white px-8 py-3.5 rounded-full hover:bg-primary-800 transition-all duration-300 font-light text-sm shadow-md hover:shadow-xl hover:-translate-y-0.5 group"
+                >
+                  <span>Découvrir l'offre</span>
+                  <svg className="w-4 h-4 group-hover:translate-x-1 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"/>
+                  </svg>
+                </button>
+              </div>
+              
+              {/* Métriques - Côté droit */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-gradient-to-br from-primary/5 to-transparent border border-primary/10 rounded-2xl p-6 hover:border-primary/30 transition-all duration-300">
+                  <div className="text-4xl font-light text-primary mb-2">100K+</div>
+                  <div className="text-sm text-gray-700 font-medium">Places</div>
+                  <div className="text-xs text-gray-500 font-light">Disponibles</div>
+                </div>
+                <div className="bg-gradient-to-br from-gray-50 to-transparent border border-gray-200 rounded-2xl p-6 hover:border-primary/30 transition-all duration-300">
+                  <div className="text-4xl font-light text-gray-900 mb-2">6 mois</div>
+                  <div className="text-sm text-gray-700 font-medium">Réservation</div>
+                  <div className="text-xs text-gray-500 font-light">À l'avance</div>
+                </div>
+                <div className="bg-gradient-to-br from-gray-50 to-transparent border border-gray-200 rounded-2xl p-6 hover:border-primary/30 transition-all duration-300">
+                  <div className="text-4xl font-light text-gray-900 mb-2">-66%</div>
+                  <div className="text-sm text-gray-700 font-medium">Prix</div>
+                  <div className="text-xs text-gray-500 font-light">vs. Voirie</div>
+                </div>
+                <div className="bg-gradient-to-br from-primary/5 to-transparent border border-primary/10 rounded-2xl p-6 hover:border-primary/30 transition-all duration-300">
+                  <div className="text-4xl font-light text-primary mb-2">700</div>
+                  <div className="text-sm text-gray-700 font-medium">Villes</div>
+                  <div className="text-xs text-gray-500 font-light">Couvertes</div>
                 </div>
               </div>
+            </div>
 
               {/* 3 avantages - Liste horizontale avec séparateurs */}
               <div className="max-w-5xl mx-auto">
@@ -469,92 +461,95 @@ export default function Home() {
             </div>
           </section>
 
-          {/* SECTION IMAGE PANORAMIQUE - ULTRA ORIGINAL & MINIMALISTE */}
-          <section className="relative py-32 bg-white px-6 overflow-hidden">
-            {/* Cercles décoratifs en arrière-plan */}
-            <div className="absolute top-20 right-10 w-72 h-72 bg-primary/5 rounded-full blur-3xl -z-10"></div>
-            <div className="absolute bottom-20 left-10 w-96 h-96 bg-gray-100 rounded-full blur-3xl -z-10"></div>
-
-            <div className="max-w-7xl mx-auto">
-              {/* Grid asymétrique */}
-              <div className="grid grid-cols-1 lg:grid-cols-5 gap-12 items-center">
-
-                {/* Colonne gauche - Texte (2/5) */}
-                <div className="lg:col-span-2 space-y-8">
-                  <div className="inline-flex items-center gap-2 border border-primary/20 rounded-full px-4 py-1.5 mb-4">
-                    <div className="w-1.5 h-1.5 bg-primary rounded-full animate-pulse"></div>
-                    <span className="text-xs uppercase tracking-widest text-gray-600 font-medium">Innovation</span>
-                  </div>
-
-                  <h2 className="text-5xl md:text-6xl font-light leading-[1.1] text-gray-900">
-                    Un parking<br />
-                    quand vous<br />
-                    <span className="italic text-primary/80">en avez besoin</span>
-                  </h2>
-
-                  <p className="text-lg text-gray-600 font-light leading-relaxed">
-                    Accédez à des milliers de places disponibles instantanément
-                  </p>
-
-                  {/* Stats inline */}
-                  <div className="flex items-center gap-8 pt-4">
-                    <div className="flex flex-col">
-                      <span className="text-3xl font-light text-primary">100K+</span>
-                      <span className="text-xs text-gray-500 font-light">Places</span>
-                    </div>
-                    <div className="w-px h-12 bg-gray-200"></div>
-                    <div className="flex flex-col">
-                      <span className="text-3xl font-light text-primary">700</span>
-                      <span className="text-xs text-gray-500 font-light">Villes</span>
-                    </div>
-                    <div className="w-px h-12 bg-gray-200"></div>
-                    <div className="flex flex-col">
-                      <span className="text-3xl font-light text-primary">24/7</span>
-                      <span className="text-xs text-gray-500 font-light">Accès</span>
-                    </div>
-                  </div>
-
-                  <button className="inline-flex items-center gap-2 bg-gray-900 text-white px-6 py-3 rounded-full hover:bg-gray-800 transition-all duration-300 font-light text-sm shadow-lg group">
-                    <span>Découvrir nos parkings</span>
-                    <svg className="w-4 h-4 group-hover:translate-x-1 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
-                    </svg>
-                  </button>
+        {/* SECTION IMAGE PANORAMIQUE - ULTRA ORIGINAL & MINIMALISTE */}
+        <section className="relative py-32 bg-white px-6 overflow-hidden">
+          {/* Cercles décoratifs en arrière-plan */}
+          <div className="absolute top-20 right-10 w-72 h-72 bg-primary/5 rounded-full blur-3xl -z-10"></div>
+          <div className="absolute bottom-20 left-10 w-96 h-96 bg-gray-100 rounded-full blur-3xl -z-10"></div>
+          
+          <div className="max-w-7xl mx-auto">
+            {/* Grid asymétrique */}
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-12 items-center">
+              
+              {/* Colonne gauche - Texte (2/5) */}
+              <div className="lg:col-span-2 space-y-8">
+                <div className="inline-flex items-center gap-2 border border-primary/20 rounded-full px-4 py-1.5 mb-4">
+                  <div className="w-1.5 h-1.5 bg-primary rounded-full animate-pulse"></div>
+                  <span className="text-xs uppercase tracking-widest text-gray-600 font-medium">Innovation</span>
                 </div>
-
-                {/* Colonne droite - Image (3/5) */}
-                <div className="lg:col-span-3">
-                  <div className="relative group">
-                    {/* Image principale avec masque */}
-                    <div className="relative overflow-hidden rounded-3xl">
-                      <img
-                        src="/images/pcityparker.png"
-                        alt="Parking moderne"
-                        className="w-full h-[500px] object-cover transform group-hover:scale-105 transition-transform duration-700"
-                      />
-                      {/* Overlay subtil */}
-                      <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent mix-blend-overlay"></div>
-                    </div>
-
-                    {/* Carte flottante */}
-                    <div className="absolute -bottom-6 -left-6 bg-white rounded-2xl p-6 shadow-2xl">
-                      <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center">
-                          <svg className="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                        </div>
-                        <div>
-                          <div className="text-sm font-medium text-gray-900">Stationnement intelligent</div>
-                          <div className="text-xs text-gray-500 font-light">Disponible maintenant</div>
-                        </div>
+                
+                <h2 className="text-5xl md:text-6xl font-light leading-[1.1] text-gray-900">
+                  Un parking<br />
+                  quand vous<br />
+                  <span className="italic text-primary/80">en avez besoin</span>
+                </h2>
+                
+                <p className="text-lg text-gray-600 font-light leading-relaxed">
+                  Accédez à des milliers de places disponibles instantanément
+                </p>
+                
+                {/* Stats inline */}
+                <div className="flex items-center gap-8 pt-4">
+                  <div className="flex flex-col">
+                    <span className="text-3xl font-light text-primary">100K+</span>
+                    <span className="text-xs text-gray-500 font-light">Places</span>
+                  </div>
+                  <div className="w-px h-12 bg-gray-200"></div>
+                  <div className="flex flex-col">
+                    <span className="text-3xl font-light text-primary">700</span>
+                    <span className="text-xs text-gray-500 font-light">Villes</span>
+                  </div>
+                  <div className="w-px h-12 bg-gray-200"></div>
+                  <div className="flex flex-col">
+                    <span className="text-3xl font-light text-primary">24/7</span>
+                    <span className="text-xs text-gray-500 font-light">Accès</span>
+                  </div>
+                </div>
+                
+                <button
+                  onClick={() => navigate('/reservation')}
+                  className="inline-flex items-center gap-2 bg-gray-900 text-white px-6 py-3 rounded-full hover:bg-gray-800 transition-all duration-300 font-light text-sm shadow-lg group"
+                >
+                  <span>Découvrir nos parkings</span>
+                  <svg className="w-4 h-4 group-hover:translate-x-1 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"/>
+                  </svg>
+                </button>
+              </div>
+              
+              {/* Colonne droite - Image (3/5) */}
+              <div className="lg:col-span-3">
+                <div className="relative group">
+                  {/* Image principale avec masque */}
+                  <div className="relative overflow-hidden rounded-3xl">
+                    <img
+                      src="/images/pcityparker.png"
+                      alt="Parking moderne"
+                      className="w-full h-[500px] object-cover transform group-hover:scale-105 transition-transform duration-700"
+                    />
+                    {/* Overlay subtil */}
+                    <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent mix-blend-overlay"></div>
+                  </div>
+                  
+                  {/* Carte flottante */}
+                  <div className="absolute -bottom-6 -left-6 bg-white rounded-2xl p-6 shadow-2xl">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center">
+                        <svg className="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                      </div>
+                      <div>
+                        <div className="text-sm font-medium text-gray-900">Stationnement intelligent</div>
+                        <div className="text-xs text-gray-500 font-light">Disponible maintenant</div>
                       </div>
                     </div>
                   </div>
                 </div>
               </div>
             </div>
-          </section>
+          </div>
+        </section>
 
           {/* SECTION Types de stationnement - ULTRA ORIGINAL & MINIMALISTE */}
           <section id="tarifs" className="py-40 bg-gradient-to-b from-gray-50 to-white px-6">

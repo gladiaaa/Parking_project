@@ -3,6 +3,9 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Home from "./pages/Home.jsx";
 import Login from "./pages/Login.jsx";
 import Register from "./pages/Register.jsx";
+import Reservation from "./pages/Reservation.jsx";
+import MesReservations from "./pages/MesReservations.jsx";
+import Maps from "./pages/Maps.jsx";
 import UserDashboard from "./pages/UserDashboard.jsx";
 import OwnerDashboard from "./pages/OwnerDashboard.jsx";
 import ParkingDetails from "./pages/ParkingDetails.jsx";
@@ -16,8 +19,18 @@ function App() {
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
-
+        <Route path="/reservation" element={<Reservation />} />
+        <Route path="/maps" element={<Maps />} />
+        
         {/* Routes protégées */}
+        <Route
+          path="/mes-reservations"
+          element={
+            <ProtectedRoute>
+              <MesReservations />
+            </ProtectedRoute>
+          }
+        />
         <Route
           path="/dashboard-user"
           element={

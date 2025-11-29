@@ -40,8 +40,20 @@ export default function Header() {
           >
             Accueil
           </Link>
-          <a
-            href="#services"
+          <Link 
+            to="/reservation" 
+            className="px-6 py-2.5 text-white font-light text-sm transition-all duration-300 hover:text-gray-300"
+          >
+            Réserver
+          </Link>
+          <Link 
+            to="/maps" 
+            className="px-6 py-2.5 text-white font-light text-sm transition-all duration-300 hover:text-gray-300"
+          >
+            Carte
+          </Link>
+          <a 
+            href="#services" 
             onClick={(e) => {
               e.preventDefault();
               document.querySelector('#services')?.scrollIntoView({ behavior: 'smooth' });
@@ -60,16 +72,6 @@ export default function Header() {
           >
             Tarifs
           </a>
-          <a
-            href="#villes"
-            onClick={(e) => {
-              e.preventDefault();
-              document.querySelector('#villes')?.scrollIntoView({ behavior: 'smooth' });
-            }}
-            className="px-6 py-2.5 text-white font-light text-sm transition-all duration-300 hover:text-gray-300 cursor-pointer"
-          >
-            Villes
-          </a>
         </nav>
 
         {/* Boutons Connexion/Inscription ou Dashboard */}
@@ -83,12 +85,20 @@ export default function Header() {
                 Dashboard
               </Link>
             ) : (
-              <Link
-                to="/dashboard-user"
-                className="bg-gray-900 text-white px-6 py-2.5 rounded-full text-sm shadow-lg hover:bg-gray-800 transition-all duration-300"
-              >
-                Mon compte
-              </Link>
+              <>
+                <Link 
+                  to="/mes-reservations" 
+                  className="text-gray-900 bg-white border border-gray-200 px-6 py-2.5 rounded-full font-light text-sm shadow-lg hover:bg-gray-50 transition-all duration-300"
+                >
+                  Mes réservations
+                </Link>
+                <Link 
+                  to="/dashboard-user" 
+                  className="bg-gray-900 text-white px-6 py-2.5 rounded-full font-light text-sm shadow-lg hover:bg-gray-800 transition-all duration-300"
+                >
+                  Mon compte
+                </Link>
+              </>
             )}
             <button
               onClick={handleLogout}

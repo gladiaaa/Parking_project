@@ -42,11 +42,13 @@ src/
 ## Fonctionnalités
 
 ### Utilisateurs
+
 - Inscription avec choix de rôle
 - Réservation de parking
 - Suivi des réservations et stationnements
 
 ### Propriétaires
+
 - Ajout et gestion de parkings
 - Visualisation des statistiques (CA, réservations, stationnements)
 - Modification des tarifs et horaires

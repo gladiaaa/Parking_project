@@ -351,3 +351,4 @@ return (
 **Documentation mise à jour le:** 2025-11-20  
 **Version:** 1.0.0
 
+
