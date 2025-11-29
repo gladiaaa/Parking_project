@@ -4,6 +4,8 @@ import Header from "../components/Header";
 import Footer from "../components/Footer";
 import LoadingScreen from "../components/LoadingScreen";
 import CountUp from '../UI/Countup'
+import GooglePlayBadge from '../assets/google_play_badge.svg';
+import AppStoreBadge from '../assets/app_store_badge.svg';
 
 export default function Home() {
   const [isLoading, setIsLoading] = useState(true);
@@ -105,22 +107,18 @@ export default function Home() {
                   {/* Badges stores */}
                   <div className="flex gap-2">
                     <a href="#" className="inline-block">
-                      <div className="bg-black text-white px-3 py-2 rounded-lg flex items-center gap-2 hover:bg-gray-800 transition">
-                        <span className="text-xl">🍎</span>
-                        <div className="text-left">
-                          <p className="text-xs leading-tight">Télécharger dans</p>
-                          <p className="text-xs font-semibold">l'App Store</p>
-                        </div>
-                      </div>
+                      <img
+                        src={AppStoreBadge}
+                        alt="Disponible sur Google Play"
+                        className="h-12 w-auto"
+                      />
                     </a>
                     <a href="#" className="inline-block">
-                      <div className="bg-black text-white px-3 py-2 rounded-lg flex items-center gap-2 hover:bg-gray-800 transition">
-                        <span className="text-xl">▶️</span>
-                        <div className="text-left">
-                          <p className="text-xs leading-tight">Disponible sur</p>
-                          <p className="text-xs font-semibold">Google Play</p>
-                        </div>
-                      </div>
+                      <img
+                        src={GooglePlayBadge}
+                        alt="Disponible sur Google Play"
+                        className="h-12 w-auto"
+                      />
                     </a>
                   </div>
 
@@ -378,37 +376,37 @@ export default function Home() {
                   </div>
                   <div className="bg-gradient-to-br from-gray-50 to-transparent border border-gray-200 rounded-2xl p-6 hover:border-primary/30 transition-all duration-300">
                     <div className="text-4xl font-light text-gray-900 mb-2"><CountUp
-  from={0}
-  to={6}
-  separator=","
-  direction="up"
-  duration={1}
-  className="count-up-text"
-/> mois</div>
+                      from={0}
+                      to={6}
+                      separator=","
+                      direction="up"
+                      duration={1}
+                      className="count-up-text"
+                    /> mois</div>
                     <div className="text-sm text-gray-700 font-medium">Réservation</div>
                     <div className="text-xs text-gray-500 font-light">À l'avance</div>
                   </div>
                   <div className="bg-gradient-to-br from-gray-50 to-transparent border border-gray-200 rounded-2xl p-6 hover:border-primary/30 transition-all duration-300">
                     <div className="text-4xl font-light text-gray-900 mb-2">-<CountUp
-  from={0}
-  to={66}
-  separator=","
-  direction="up"
-  duration={1}
-  className="count-up-text"
-/>%</div>
+                      from={0}
+                      to={66}
+                      separator=","
+                      direction="up"
+                      duration={1}
+                      className="count-up-text"
+                    />%</div>
                     <div className="text-sm text-gray-700 font-medium">Prix</div>
                     <div className="text-xs text-gray-500 font-light">vs. Voirie</div>
                   </div>
                   <div className="bg-gradient-to-br from-primary/5 to-transparent border border-primary/10 rounded-2xl p-6 hover:border-primary/30 transition-all duration-300">
                     <div className="text-4xl font-light text-primary mb-2"><CountUp
-  from={0}
-  to={700}
-  separator=","
-  direction="up"
-  duration={1}
-  className="count-up-text"
-/></div>
+                      from={0}
+                      to={700}
+                      separator=","
+                      direction="up"
+                      duration={1}
+                      className="count-up-text"
+                    /></div>
                     <div className="text-sm text-gray-700 font-medium">Villes</div>
                     <div className="text-xs text-gray-500 font-light">Couvertes</div>
                   </div>

@@ -1,0 +1,172 @@
+{
+  "info": {
+    "_postman_id": "e0c08f67-43d8-4d09-8a7a-b305ead55551",
+    "name": "Parking Project - Auth & Security Tests",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Login",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"email\": \"test@test.com\",\n    \"password\": \"Test123456789\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8001/api/auth/login",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8001",
+          "path": ["api", "auth", "login"]
+        }
+      },
+      "response": []
+    },
+
+    {
+      "name": "Get Me (Authenticated)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status is 200\", function () {",
+              "  pm.response.to.have.status(200);",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:8001/api/me",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8001",
+          "path": ["api", "me"]
+        }
+      },
+      "response": []
+    },
+
+    {
+      "name": "Get Me (Unauthorized)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:8001/api/me",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8001",
+          "path": ["api", "me"]
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "// Force suppression des cookies",
+              "pm.cookies.jar().clear(pm.request.url.getHost());"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Unauthorized\", function () {",
+              "   pm.response.to.have.status(401);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Refresh Token",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:8001/api/auth/refresh",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8001",
+          "path": ["api", "auth", "refresh"]
+        }
+      },
+      "response": []
+    },
+
+    {
+      "name": "Role Test - Owner Only",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "http://localhost:8001/api/owner/dashboard",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8001",
+          "path": ["api", "owner", "dashboard"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Forbidden\", function () {",
+              "  pm.response.to.have.status(403);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Start 2FA",
+      "request": {
+        "method": "POST",
+        "url": {
+          "raw": "http://localhost:8001/api/auth/2fa/start",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8001",
+          "path": ["api", "auth", "2fa", "start"]
+        }
+      }
+    },
+
+    {
+      "name": "Verify 2FA",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"code\": \"123456\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8001/api/auth/2fa/verify",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8001",
+          "path": ["api", "auth", "2fa", "verify"]
+        }
+      }
+    }
+  ]
+}

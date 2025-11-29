@@ -1,19 +1,22 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
+import { apiService } from "../services/apiService";
 
-export default function ProtectedRoute({ children, role }) {
-  const userStr = localStorage.getItem("user");
-  const user = userStr ? JSON.parse(userStr) : null;
+export default function ProtectedRoute({ children }) {
+  const [allowed, setAllowed] = useState(null);
 
-  if (!user) {
-    return <Navigate to="/login" replace />;
-  }
+  useEffect(() => {
+    apiService
+      .getCurrentUser()
+      .then((user) => {
+        if (user) setAllowed(true);
+        else setAllowed(false);
+      })
+      .catch(() => setAllowed(false));
+  }, []);
 
-  const userRole = user.role?.toLowerCase().trim();
-
-  if (role && userRole !== role.toLowerCase().trim()) {
-    return <Navigate to="/login" replace />;
-  }
+  if (allowed === null) return <div>Chargement...</div>;
+  if (!allowed) return <Navigate to="/login" />;
 
   return children;
 }

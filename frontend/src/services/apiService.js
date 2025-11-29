@@ -132,12 +132,9 @@ export const apiService = {
    * - si toujours 401 → retourne null
    */
   async getCurrentUser() {
-    const res = await authFetch("/api/me", {
-      method: "GET",
-    });
+    const res = await authFetch("/api/me", { method: "GET" });
 
     if (res.status === 401) {
-      // même après refresh → pas connecté
       return null;
     }
 
@@ -146,8 +143,9 @@ export const apiService = {
     return {
       id: me.id,
       email: me.email,
+      firstname: me.firstname ?? null,
+      lastname: me.lastname ?? null,
       role: me.role ? me.role.toLowerCase().trim() : "user",
-
     };
   },
 
@@ -162,12 +160,13 @@ export const apiService = {
         credentials: "include",
       });
 
-      if (!res.ok) {
+      try {
+        await handleResponse(res);
+        return true;
+      } catch {
         return false;
       }
 
-      await handleResponse(res); // on ignore le contenu, on veut juste savoir si c'est ok
-      return true;
     } catch {
       return false;
     }
@@ -183,3 +182,5 @@ export const apiService = {
     });
   },
 };
+
+export default apiService;

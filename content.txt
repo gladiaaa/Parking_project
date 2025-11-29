@@ -116,6 +116,15 @@ cd Backend
 composer require --dev phpunit/phpunit:^11
 ./vendor/bin/phpunit
 ```
+# ProjecT_Parc
+Gestionnaire de places de parking
+
+
+## Création de la bdd :
+
+mysql -u root -h 127.0.0.1 -P 3306 < sql/001_init_core.sql
+
+
 
 
 ================================================
@@ -445,7 +454,8 @@ FILE: Backend/composer.json
 {
   "require": {
     "php": "^8.2",
-    "firebase/php-jwt": "^6.10"
+    "firebase/php-jwt": "^6.10",
+    "vlucas/phpdotenv": "^5.6"
   },
   "autoload": {
     "psr-4": {
@@ -456,6 +466,7 @@ FILE: Backend/composer.json
     "phpunit/phpunit": "11"
   }
 }
+
 
 
 ================================================
@@ -495,543 +506,33 @@ $router->dispatch($method, $path);
 
 
 ================================================
-FILE: Backend/public/login.php
-================================================
-<?php
-// Login form -> POST vers /api/auth/login via cURL
-$api = "http://localhost:8001/api";
-$response = null; $error = null;
-
-// util: propage les Set-Cookie de l'API vers le navigateur
-function forward_set_cookies(array $setCookies): void {
-  foreach ($setCookies as $sc) {
-    // $sc est déjà une ligne "Set-Cookie: ..."
-    header($sc, false); // false = ne remplace pas les précédents
-  }
-}
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-  $email = trim($_POST['email'] ?? '');
-  $password = trim($_POST['password'] ?? '');
-  if ($email && $password) {
-    $payload = json_encode(['email'=>$email, 'password'=>$password], JSON_UNESCAPED_UNICODE);
-
-    $ch = curl_init("$api/auth/login");
-    curl_setopt_array($ch, [
-      CURLOPT_POST => true,
-      CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
-      CURLOPT_POSTFIELDS => $payload,
-      CURLOPT_RETURNTRANSFER => true,
-      CURLOPT_HEADER => true, // on veut les headers pour récupérer Set-Cookie
-    ]);
-    $raw = curl_exec($ch);
-    $headerSize = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
-    $headersStr = substr($raw, 0, $headerSize);
-    $bodyStr = substr($raw, $headerSize);
-    curl_close($ch);
-
-    // récupère les Set-Cookie
-    $setCookies = [];
-    foreach (explode("\r\n", $headersStr) as $h) {
-      if (stripos($h, 'Set-Cookie:') === 0) $setCookies[] = $h;
-    }
-
-    $data = json_decode($bodyStr, true);
-    if (!is_array($data)) { $error = "Réponse invalide du serveur."; }
-    else {
-      if (isset($data['ok']) && $data['ok'] === true) {
-        forward_set_cookies($setCookies);
-        // PRG -> vers me.php
-        header('Location: /me.php'); exit;
-      }
-      if (($data['status'] ?? null) === '2fa_required') {
-        // propage cookie P2_AUTH pour que le navigateur l'ait
-        forward_set_cookies($setCookies);
-        header('Location: /verify_2fa.php'); exit;
-      }
-      $response = $data;
-    }
-  } else {
-    $error = "Veuillez entrer email et mot de passe.";
-  }
-}
-?>
-<!doctype html>
-<html lang="fr">
-<head>
-  <meta charset="utf-8" />
-  <title>Login Parking App</title>
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'">
-  <style>
-    .link{
-  margin-top:12px;
-  font-size:13px;
-  text-align:center;
-}
-.link a{
-  color:#ff5722;
-  text-decoration:none;
-}
-.link a:hover{
-  text-decoration:underline;
-}
-
-    body{font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif;background:#f5f5f5;display:flex;align-items:center;justify-content:center;height:100vh}
-    form{background:#fff;padding:24px 32px;border-radius:12px;box-shadow:0 8px 20px rgba(0,0,0,.1);width:320px}
-    h1{text-align:center;color:#ff5722;margin-bottom:20px;font-weight:800}
-    label{font-size:12px;color:#555}
-    input{width:100%;margin:.25rem 0 10px;padding:10px;border-radius:6px;border:1px solid #ccc;font-size:14px}
-    button{width:100%;padding:10px;background:#ff5722;border:none;color:#fff;font-weight:700;border-radius:6px;cursor:pointer}
-    button:hover{background:#e04d1d}
-    .msg{margin-top:16px;padding:10px;background:#f0f0f0;border-radius:6px;font-size:14px;white-space:pre-wrap}
-    .err{background:#ffeaea;color:#a00}
-  </style>
-</head>
-<body>
-  <form method="post" action="/login.php" autocomplete="on">
-    <h1>Connexion</h1>
-    <label for="email">Email</label>
-    <input id="email" name="email" type="email" placeholder="adresse@email.com" autocomplete="email" required>
-    <label for="pwd">Mot de passe</label>
-    <input id="pwd" name="password" type="password" placeholder="••••••••" autocomplete="current-password" required>
-<button type="submit">Se connecter</button>
-
-<div class="link">
-  Pas encore de compte ?
-  <a href="/register.php">Créer un compte</a>
-</div>
-
-
-    <?php if ($response): ?>
-      <div class="msg"><?= htmlspecialchars(json_encode($response, JSON_PRETTY_PRINT|JSON_UNESCAPED_UNICODE)) ?></div>
-    <?php elseif ($error): ?>
-      <div class="msg err"><strong>Erreur :</strong> <?= htmlspecialchars($error) ?></div>
-    <?php endif; ?>
-  </form>
-</body>
-</html>
-
-
-
-================================================
-FILE: Backend/public/logout.php
-================================================
-<?php
-$api = "http://localhost:8001/api";
-$ch = curl_init("$api/auth/logout");
-$cookieHeader = '';
-foreach ($_COOKIE as $k=>$v) { $cookieHeader .= "$k=$v; "; }
-curl_setopt_array($ch, [
-  CURLOPT_POST => true,
-  CURLOPT_HTTPHEADER => ['Cookie: ' . $cookieHeader],
-  CURLOPT_RETURNTRANSFER => true,
-]);
-curl_exec($ch); curl_close($ch);
-header('Location: /login.php'); exit;
-
-
-
-================================================
-FILE: Backend/public/me.php
-================================================
-<?php
-// me.php : affiche le profil à partir de /api/me
-
-$api = "http://localhost:8001/api";
-$response = null;
-$error = null;
-
-// ----- Appel API /api/me avec les cookies JWT du navigateur -----
-$access  = $_COOKIE['ACCESS_TOKEN'] ?? '';
-$refresh = $_COOKIE['REFRESH_TOKEN'] ?? '';
-
-if ($access === '') {
-    $error = "Non connecté (pas de cookie ACCESS_TOKEN).";
-} else {
-    $ch = curl_init("$api/me");
-
-    $headers = [];
-
-    // On propage les cookies vers l'API
-    $cookieParts = ["ACCESS_TOKEN=" . urlencode($access)];
-    if ($refresh !== '') {
-        $cookieParts[] = "REFRESH_TOKEN=" . urlencode($refresh);
-    }
-    $headers[] = 'Cookie: ' . implode('; ', $cookieParts);
-
-    curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_HTTPHEADER     => $headers,
-    ]);
-
-    $body   = curl_exec($ch);
-    $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-
-    $data = json_decode($body, true);
-
-    if ($status === 200 && is_array($data) && !isset($data['error'])) {
-        $response = $data;
-    } else {
-        // erreur renvoyée par l'API (401 Unauthorized, etc.)
-        $error = $data['error'] ?? ("Erreur HTTP $status");
-    }
-}
-?>
-<!doctype html>
-<html lang="fr">
-<head>
-  <meta charset="utf-8" />
-  <title>Mon profil</title>
-  <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; style-src 'self' 'unsafe-inline'">
-  <style>
-    body{
-      font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif;
-      background:#f5f5f5;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      height:100vh;
-      margin:0;
-    }
-    .card{
-      background:#fff;
-      padding:32px 40px;
-      border-radius:16px;
-      box-shadow:0 12px 30px rgba(0,0,0,.12);
-      min-width:420px;
-    }
-    h1{
-      margin-top:0;
-      color:#ff5722;
-      font-size:28px;
-    }
-    .label{font-weight:600;color:#444;margin-top:8px;}
-    .value{margin-left:4px;}
-    a.btn{
-      display:inline-block;
-      margin-top:16px;
-      color:#ff5722;
-      text-decoration:none;
-      font-weight:600;
-    }
-    a.btn:hover{text-decoration:underline;}
-    pre{
-      margin-top:20px;
-      padding:10px;
-      background:#f0f0f0;
-      border-radius:8px;
-      font-size:12px;
-      max-height:200px;
-      overflow:auto;
-    }
-  </style>
-</head>
-<body>
-  <div class="card">
-    <h1>Mon profil</h1>
-
-    <?php if ($response): ?>
-      <div>
-        <div><span class="label">ID :</span>
-          <span class="value"><?= htmlspecialchars((string)$response['id']) ?></span>
-        </div>
-        <div><span class="label">Email :</span>
-          <span class="value"><?= htmlspecialchars((string)$response['email']) ?></span>
-        </div>
-        <div><span class="label">Rôle :</span>
-          <span class="value"><?= htmlspecialchars((string)$response['role']) ?></span>
-        </div>
-
-        <a class="btn" href="/logout.php">Logout</a>
-      </div>
-    <?php else: ?>
-      <p><strong>Non connecté :</strong> <?= htmlspecialchars($error ?? 'Inconnu') ?></p>
-      <a class="btn" href="/login.php">Se connecter</a>
-    <?php endif; ?>
-
-    <pre>JSON
-<?= htmlspecialchars(json_encode($response, JSON_PRETTY_PRINT|JSON_UNESCAPED_UNICODE)); ?></pre>
-  </div>
-</body>
-</html>
-
-
-
-================================================
-FILE: Backend/public/register.php
-================================================
-<?php
-// Formulaire d'inscription -> POST vers /api/auth/register via cURL
-$api = "http://localhost:8001/api";
-$response = null;
-$error = null;
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $email = trim($_POST['email'] ?? '');
-    $password = trim($_POST['password'] ?? '');
-
-    if ($email && $password) {
-        $payload = json_encode(
-            ['email' => $email, 'password' => $password],
-            JSON_UNESCAPED_UNICODE
-        );
-
-        $ch = curl_init("$api/auth/register");
-        curl_setopt_array($ch, [
-            CURLOPT_POST => true,
-            CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
-            CURLOPT_POSTFIELDS => $payload,
-            CURLOPT_RETURNTRANSFER => true,
-        ]);
-        $bodyStr = curl_exec($ch);
-        $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-
-        $data = json_decode($bodyStr, true);
-
-        if (!is_array($data)) {
-            $error = "Réponse invalide du serveur.";
-        } else {
-            if ($status === 201 && ($data['status'] ?? null) === 'ok') {
-                // Inscription OK → on renvoie sur la page de login
-                header('Location: /login.php');
-                exit;
-            }
-
-            // Sinon on affiche l'erreur renvoyée par l'API
-            $error = $data['error'] ?? 'Inscription impossible.';
-            $response = $data;
-        }
-    } else {
-        $error = "Veuillez entrer email et mot de passe.";
-    }
-}
-?>
-<!doctype html>
-<html lang="fr">
-
-<head>
-    <meta charset="utf-8" />
-    <title>Inscription Parking App</title>
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'">
-    <style>
-        body {
-            font-family: system-ui, Segoe UI, Roboto, Arial, sans-serif;
-            background: #f5f5f5;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            height: 100vh
-        }
-
-        form {
-            background: #fff;
-            padding: 24px 32px;
-            border-radius: 12px;
-            box-shadow: 0 8px 20px rgba(0, 0, 0, .1);
-            width: 320px
-        }
-
-        h1 {
-            text-align: center;
-            color: #ff5722;
-            margin-bottom: 20px;
-            font-weight: 800
-        }
-
-        label {
-            font-size: 12px;
-            color: #555
-        }
-
-        input {
-            width: 100%;
-            margin: .25rem 0 10px;
-            padding: 10px;
-            border-radius: 6px;
-            border: 1px solid #ccc;
-            font-size: 14px
-        }
-
-        button {
-            width: 100%;
-            padding: 10px;
-            background: #ff5722;
-            border: none;
-            color: #fff;
-            font-weight: 700;
-            border-radius: 6px;
-            cursor: pointer
-        }
-
-        button:hover {
-            background: #e04d1d
-        }
-
-        .msg {
-            margin-top: 16px;
-            padding: 10px;
-            background: #f0f0f0;
-            border-radius: 6px;
-            font-size: 14px;
-            white-space: pre-wrap
-        }
-
-        .err {
-            background: #ffeaea;
-            color: #a00
-        }
-
-        .link {
-            margin-top: 12px;
-            font-size: 13px;
-            text-align: center;
-        }
-
-        .link a {
-            color: #ff5722;
-            text-decoration: none;
-        }
-
-        .link a:hover {
-            text-decoration: underline;
-        }
-    </style>
-</head>
-
-<body>
-    <form method="post" action="/register.php" autocomplete="on">
-        <h1>Inscription</h1>
-        <label for="email">Email</label>
-        <input id="email" name="email" type="email" placeholder="adresse@email.com" autocomplete="email" required>
-
-        <label for="pwd">Mot de passe</label>
-        <input id="pwd" name="password" type="password" placeholder="••••••••" autocomplete="new-password" required>
-
-        <button type="submit">Créer mon compte</button>
-
-        <div class="link">
-            Déjà un compte ?
-            <a href="/login.php">Se connecter</a>
-        </div>
-
-        <?php if ($response): ?>
-            <div class="msg">
-                <?= htmlspecialchars(json_encode($response, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)) ?>
-            </div>
-        <?php elseif ($error): ?>
-            <div class="msg err">
-                <strong>Erreur :</strong> <?= htmlspecialchars($error) ?>
-            </div>
-        <?php endif; ?>
-    </form>
-</body>
-
-</html>
-
-
-================================================
-FILE: Backend/public/verify_2fa.php
-================================================
-<?php
-$api = "http://localhost:8001/api";
-$response = null; $error = null;
-
-function forward_set_cookies(array $setCookies): void {
-  foreach ($setCookies as $sc) { header($sc, false); }
-}
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-  $code = trim($_POST['code'] ?? '');
-  if ($code !== '') {
-    $payload = json_encode(['code'=>$code], JSON_UNESCAPED_UNICODE);
-    $ch = curl_init("$api/auth/2fa/verify");
-    // on renvoie les cookies du navigateur à l’API (P2_AUTH)
-    $cookieHeader = '';
-    foreach ($_COOKIE as $k=>$v) { $cookieHeader .= "$k=$v; "; }
-    curl_setopt_array($ch, [
-      CURLOPT_POST => true,
-      CURLOPT_HTTPHEADER => [
-        'Content-Type: application/json',
-        'Cookie: ' . $cookieHeader
-      ],
-      CURLOPT_POSTFIELDS => $payload,
-      CURLOPT_RETURNTRANSFER => true,
-      CURLOPT_HEADER => true,
-    ]);
-    $raw = curl_exec($ch);
-    $headerSize = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
-    $headersStr = substr($raw, 0, $headerSize);
-    $bodyStr = substr($raw, $headerSize);
-    curl_close($ch);
-
-    $setCookies = [];
-    foreach (explode("\r\n", $headersStr) as $h) {
-      if (stripos($h, 'Set-Cookie:') === 0) $setCookies[] = $h;
-    }
-
-    $data = json_decode($bodyStr, true);
-    if (!is_array($data)) $error = "Réponse invalide du serveur.";
-    else {
-      if (isset($data['ok']) && $data['ok'] === true) {
-        forward_set_cookies($setCookies); // ACCESS/REFRESH
-        header('Location: /me.php'); exit;
-      }
-      $response = $data;
-    }
-  } else {
-    $error = "Entrez le code à 6 chiffres.";
-  }
-}
-?>
-<!doctype html>
-<html lang="fr">
-<head>
-  <meta charset="utf-8" />
-  <title>Vérification 2FA</title>
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'">
-  <style>
-    body{font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif;background:#f5f5f5;display:flex;align-items:center;justify-content:center;height:100vh}
-    form{background:#fff;padding:24px 32px;border-radius:12px;box-shadow:0 8px 20px rgba(0,0,0,.1);width:320px}
-    h1{text-align:center;color:#ff5722;margin-bottom:20px;font-weight:800}
-    input{width:100%;margin:0 0 10px;padding:10px;border-radius:6px;border:1px solid #ccc;font-size:18px;text-align:center;letter-spacing:4px}
-    button{width:100%;padding:10px;background:#ff5722;border:none;color:#fff;font-weight:700;border-radius:6px;cursor:pointer}
-    button:hover{background:#e04d1d}
-    .msg{margin-top:16px;padding:10px;background:#f0f0f0;border-radius:6px;font-size:14px;white-space:pre-wrap}
-    .err{background:#ffeaea;color:#a00}
-  </style>
-</head>
-<body>
-  <form method="post" action="/verify_2fa.php" autocomplete="one-time-code">
-    <h1>Code 2FA</h1>
-    <input name="code" maxlength="6" inputmode="numeric" pattern="[0-9]{6}" placeholder="123456" required autocomplete="one-time-code">
-    <button type="submit">Vérifier</button>
-
-    <?php if ($response): ?>
-      <div class="msg"><?= htmlspecialchars(json_encode($response, JSON_PRETTY_PRINT|JSON_UNESCAPED_UNICODE)) ?></div>
-    <?php elseif ($error): ?>
-      <div class="msg err"><strong>Erreur :</strong> <?= htmlspecialchars($error) ?></div>
-    <?php endif; ?>
-  </form>
-</body>
-</html>
-
-
-
-================================================
 FILE: Backend/src/bootstrap.php
 ================================================
 <?php
 declare(strict_types=1);
 
+require __DIR__ . '/../vendor/autoload.php';
+
+use Dotenv\Dotenv;
+
+// =======================================
+// Load ENV
+// =======================================
+$dotenv = Dotenv::createImmutable(__DIR__ . '/..');
+$dotenv->load();
+
+// =======================================
+// Imports
+// =======================================
 use App\Infrastructure\Persistence\SqlUserRepository;
 use App\Infrastructure\Security\JwtManager;
 use App\Infrastructure\Security\PasswordHasher;
 use App\Infrastructure\Http\Router;
+
 use App\Controller\AuthController;
 use App\Controller\Auth2FAController;
+use App\Controller\MeController;
+
 use App\UseCase\Auth\LoginUser;
 use App\UseCase\Auth\RegisterUser;
 use App\UseCase\Auth\RefreshToken;
@@ -1041,18 +542,12 @@ use App\UseCase\Auth\Mailer;
 use App\UseCase\Auth\SmsSender;
 use App\UseCase\Auth\TotpVerifier;
 
-require __DIR__ . '/../vendor/autoload.php';
-
-const DB_DSN   = 'mysql:host=127.0.0.1;dbname=parking_app;charset=utf8mb4';
-const DB_USER  = 'root';
-const DB_PASS  = '';
-const APP_ORIGIN = 'http://localhost:3890';
-const JWT_SECRET = 'change_me_to_a_strong_key';
-const ACCESS_TTL = 900;
-const REFRESH_TTL = 2592000;
+// =======================================
+// Config
+// =======================================
 
 function cors(): void {
-    header('Access-Control-Allow-Origin: '.APP_ORIGIN);
+    header('Access-Control-Allow-Origin: ' . $_ENV['APP_ORIGIN']);
     header('Access-Control-Allow-Credentials: true');
     header('Access-Control-Allow-Headers: Content-Type, X-Requested-With');
     header('Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS');
@@ -1067,61 +562,188 @@ function json($data, int $status = 200): void {
 function pdo(): PDO {
     static $pdo = null;
     if ($pdo) return $pdo;
-    $pdo = new PDO(DB_DSN, DB_USER, DB_PASS, [
+
+    $dsn = 'mysql:host=' . $_ENV['DB_HOST'] .
+           ';dbname=' . $_ENV['DB_NAME'] .
+           ';charset=' . $_ENV['DB_CHARSET'];
+
+    $pdo = new PDO($dsn, $_ENV['DB_USER'], $_ENV['DB_PASS'], [
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
     ]);
+
     return $pdo;
 }
 
-// ========== CONTAINER VERY LIGHT ==========
+// =======================================
+// Dependency Container
+// =======================================
 
 $pdo = pdo();
 
 $userRepository = new SqlUserRepository($pdo);
 $passwordHasher = new PasswordHasher();
-$jwtManager     = new JwtManager(JWT_SECRET, ACCESS_TTL, REFRESH_TTL);
 
-// implémentations "fake" pour 2FA
+$jwtManager = new JwtManager(
+    $_ENV['JWT_SECRET'],
+    (int)$_ENV['JWT_ACCESS_TTL'],
+    (int)$_ENV['JWT_REFRESH_TTL']
+);
+
+// Fake mailer
 $mailer = new class implements Mailer {
     public function sendTwoFactorCodeEmail(string $to, string $code): void {
         error_log("[2FA EMAIL] $to -> code $code");
     }
 };
+
+// Fake SMS
 $smsSender = new class implements SmsSender {
     public function sendTwoFactorSms(string $phone, string $code): void {
         error_log("[2FA SMS] $phone -> code $code");
     }
 };
+
+// Fake TOTP
 $totpVerifier = new class implements TotpVerifier {
     public function verify(string $secret, string $code): bool {
-        return true; // temporaire
+        return true;
     }
 };
 
+// =======================================
 // Use cases
+// =======================================
+
 $loginUser = new LoginUser($userRepository, $passwordHasher);
 $registerUser = new RegisterUser($userRepository, $passwordHasher);
 $refreshToken = new RefreshToken($jwtManager, $userRepository);
-$startTwoFA   = new StartTwoFactor($userRepository, $mailer, $smsSender);
-$verify2FA    = new VerifyTwoFactor($userRepository, $jwtManager, $totpVerifier);
+$startTwoFA = new StartTwoFactor($userRepository, $mailer, $smsSender);
+$verify2FA = new VerifyTwoFactor($userRepository, $jwtManager, $totpVerifier);
 
+// =======================================
 // Controllers
+// =======================================
+
 $meController = new MeController($jwtManager, $userRepository);
-$authController   = new AuthController($loginUser, $refreshToken, $registerUser, $startTwoFA, $jwtManager);
+$authController = new AuthController(
+    $loginUser,
+    $refreshToken,
+    $registerUser,
+    $startTwoFA,
+    $jwtManager
+);
 $auth2FAController = new Auth2FAController($verify2FA, $jwtManager);
 
+// =======================================
 // Router
+// =======================================
+
 $router = new Router();
+
 $router
     ->get('/health', fn() => json(['ok' => true, 'php' => PHP_VERSION]))
     ->get('/api/me', [$meController, 'me'])
-    ->post('/api/auth/login',    [$authController, 'login'])
+
+    ->post('/api/auth/login', [$authController, 'login'])
     ->post('/api/auth/register', [$authController, 'register'])
-    ->post('/api/auth/refresh',  [$authController, 'refresh'])
-    ->post('/api/auth/logout',   [$authController, 'logout'])
+    ->post('/api/auth/refresh', [$authController, 'refresh'])
+    ->post('/api/auth/logout', [$authController, 'logout'])
+
     ->post('/api/auth/2fa/verify', [$auth2FAController, 'verify']);
 
+
+
+================================================
+FILE: Backend/src/parking.php
+================================================
+<?php
+
+class Parking
+{
+    private string $gps;
+    private float $tarif;
+    private DateTime $HeureDebut;
+    private DateTime $HeureFin;
+    private array $list_reservation;
+    private array $list_stationnement;
+
+    public function __construct(
+        string $gps,
+        float $tarif,
+        DateTime $HeureDebut,
+        DateTime $HeureFin,
+        array $list_stationnement,
+        array $list_reservation = []
+    ) {
+        $this->gps = $gps;
+        $this->tarif = $tarif;
+        $this->HeureDebut = $HeureDebut;
+        $this->HeureFin = $HeureFin;
+        $this->list_reservation = $list_reservation;
+        $this->list_stationnement = $list_stationnement;
+    }
+
+    public function getHeureFin(): DateTime
+    {
+        return $this->HeureFin;
+    }
+
+    public function setHeureFin(DateTime $HeureFin): void
+    {
+        $this->HeureFin = $HeureFin;
+    }
+
+    public function getHeureDebut(): DateTime
+    {
+        return $this->HeureDebut;
+    }
+
+    public function setHeureDebut(DateTime $HeureDebut): void
+    {
+        $this->HeureDebut = $HeureDebut;
+    }
+
+    public function getTarif(): float
+    {
+        return $this->tarif;
+    }
+
+    public function setTarif(float $tarif): void
+    {
+        $this->tarif = $tarif;
+    }
+
+    public function getGps(): string
+    {
+        return $this->gps;
+    }
+
+    public function setGps(string $gps): void
+    {
+        $this->gps = $gps;
+    }
+
+    public function getListReservation(): array
+    {
+        return $this->list_reservation;
+    }
+
+    public function setListReservation(array $list_reservation): void
+    {
+        $this->list_reservation = $list_reservation;
+    }
+
+    public function getListStationnement(): array
+    {
+        return $this->list_stationnement;
+    }
+
+    public function setListStationnement(array $list_stationnement): void
+    {
+        $this->list_stationnement = $list_stationnement;
+    }
+}
 
 
 ================================================
@@ -1211,14 +833,15 @@ final class AuthController
         private RegisterUser $registerUser,
         private StartTwoFactor $startTwoFactor,
         private JwtManager $jwt,
-    ) {}
+    ) {
+    }
 
     /** POST /api/auth/login */
     public function login(): void
     {
         $data = json_decode(file_get_contents('php://input'), true) ?? [];
-        $email = (string)($data['email'] ?? '');
-        $password = (string)($data['password'] ?? '');
+        $email = (string) ($data['email'] ?? '');
+        $password = (string) ($data['password'] ?? '');
 
         try {
             $result = $this->loginUser->execute($email, $password);
@@ -1243,7 +866,7 @@ final class AuthController
 
             // Pas de 2FA → on génère les vrais tokens
             $userId = $result['user_id'];
-            $role   = $result['role'];
+            $role = $result['role'];
 
             [$access, $refresh] = $this->jwt->issueFor($userId, $role);
             $this->jwt->setAccessCookie($access);
@@ -1257,24 +880,40 @@ final class AuthController
 
     /** POST /api/auth/register */
     public function register(): void
-    {
-        $data = json_decode(file_get_contents('php://input'), true) ?? [];
-        $email = (string)($data['email'] ?? '');
-        $password = (string)($data['password'] ?? '');
+{
+    $data = json_decode(file_get_contents('php://input'), true) ?? [];
 
-        try {
-            $user = $this->registerUser->execute($email, $password);
+    $email = $data['email'] ?? '';
+    $password = $data['password'] ?? '';
+    $role = $data['role'] ?? 'USER';
+    $firstname = $data['firstname'] ?? null;
+    $lastname = $data['lastname'] ?? null;
 
-            Response::json([
-                'status' => 'ok',
-                'user'   => $user,
-            ], 201);
-        } catch (\InvalidArgumentException $e) {
-            Response::json(['error' => $e->getMessage()], 400);
-        } catch (\RuntimeException $e) {
-            Response::json(['error' => $e->getMessage()], 409);
-        }
+    try {
+        $user = $this->registerUser->execute(
+            $email,
+            $password,
+            strtoupper($role),
+            $firstname,
+            $lastname
+        );
+
+        // Login automatique
+        [$access, $refresh] = $this->jwt->issueFor($user['id'], $user['role']);
+        $this->jwt->setAccessCookie($access);
+        $this->jwt->setRefreshCookie($refresh);
+
+        Response::json([
+            'success' => true,
+            'user' => $user,
+        ], 201);
+
+    } catch (\RuntimeException $e) {
+        Response::json(['error' => $e->getMessage()], 409);
+    } catch (\Throwable $e) {
+        Response::json(['error' => 'Error registering user'], 400);
     }
+}
 
     /** POST /api/auth/refresh */
     public function refresh(): void
@@ -1346,6 +985,8 @@ final class MeController
             'id'    => $user->id(),
             'email' => $user->email(),
             'role'  => $user->role(),
+            'firstname' => $user->firstname(),
+            'lastname' => $user->lastname(),
         ]);
     }
 }
@@ -1367,6 +1008,9 @@ final class User
         private string $email,
         private string $passwordHash,
         private string $role = 'USER',
+
+        private ?string $firstname = null,
+        private ?string $lastname = null,
 
         // Config 2FA
         private bool $twoFactorEnabled = true,
@@ -1409,6 +1053,14 @@ final class User
         return $this->role;
     }
 
+    public function firstname(): ?string
+    {
+        return $this->firstname;
+    }
+    public function lastname(): ?string
+    {
+        return $this->lastname;
+    }
     // ====================
     // 2FA - configuration
     // ====================
@@ -1528,7 +1180,13 @@ interface UserRepository
 
     // 👇 on remplace save2FA par ça
     public function save(User $user): void;
-    public function create(string $email, string $passwordHash, string $role = 'USER'): User;
+  public function create(
+    string $email,
+    string $passwordHash,
+    string $role = 'USER',
+    ?string $firstname = null,
+    ?string $lastname = null
+): User;
 }
 
 
@@ -1658,34 +1316,80 @@ final class SqlUserRepository implements UserRepository
 {
     public function __construct(private PDO $pdo) {}
 
+    private function hydrate(array $r): User
+    {
+        return new User(
+            (int)$r['id'],
+            (string)$r['email'],
+            (string)$r['password_hash'],
+            (string)$r['role'],
+
+            $r['firstname'] ?? null,
+            $r['lastname'] ?? null,
+
+            (bool)$r['two_factor_enabled'],
+            (string)$r['two_factor_method'],
+            $r['two_factor_last_code'] ?? null,
+            $r['two_factor_expires_at']
+                ? new \DateTimeImmutable($r['two_factor_expires_at'])
+                : null,
+            $r['two_factor_phone'] ?? null,
+            $r['two_factor_totp_secret'] ?? null,
+        );
+    }
+
     public function findById(int $id): ?User {
         $st = $this->pdo->prepare('SELECT * FROM users WHERE id = ?');
         $st->execute([$id]);
-        $row = $st->fetch(PDO::FETCH_ASSOC);
-        return $row ? $this->hydrate($row) : null;
+        $r = $st->fetch(PDO::FETCH_ASSOC);
+        return $r ? $this->hydrate($r) : null;
     }
 
     public function findByEmail(string $email): ?User {
         $st = $this->pdo->prepare('SELECT * FROM users WHERE email = ?');
         $st->execute([$email]);
-        $row = $st->fetch(PDO::FETCH_ASSOC);
-        return $row ? $this->hydrate($row) : null;
+        $r = $st->fetch(PDO::FETCH_ASSOC);
+        return $r ? $this->hydrate($r) : null;
     }
 
-    // 👇 NOUVELLE MÉTHODE
-    public function save(User $u): void {
+    public function create(
+        string $email,
+        string $passwordHash,
+        string $role = 'USER',
+        ?string $firstname = null,
+        ?string $lastname = null
+    ): User {
         $st = $this->pdo->prepare(
-            'UPDATE users SET
+            "INSERT INTO users (email, password_hash, role, firstname, lastname, two_factor_enabled, two_factor_method)
+             VALUES (?, ?, ?, ?, ?, 0, 'email')"
+        );
+
+        $st->execute([$email, $passwordHash, $role, $firstname, $lastname]);
+        $id = (int)$this->pdo->lastInsertId();
+
+        return new User(
+            $id, $email, $passwordHash, $role,
+            $firstname, $lastname,
+            false, 'email', null, null, null, null
+        );
+    }
+
+    public function save(User $u): void
+    {
+        $st = $this->pdo->prepare(
+            "UPDATE users SET
                 email = ?,
                 password_hash = ?,
                 role = ?,
+                firstname = ?,
+                lastname = ?,
                 two_factor_enabled = ?,
                 two_factor_method = ?,
                 two_factor_last_code = ?,
                 two_factor_expires_at = ?,
                 two_factor_phone = ?,
                 two_factor_totp_secret = ?
-             WHERE id = ?'
+             WHERE id = ?"
         );
 
         $exp = $u->twoFactorExpiresAt()?->format('Y-m-d H:i:s');
@@ -1694,6 +1398,8 @@ final class SqlUserRepository implements UserRepository
             $u->email(),
             $u->passwordHash(),
             $u->role(),
+            $u->firstname(),
+            $u->lastname(),
             $u->twoFactorEnabled() ? 1 : 0,
             $u->twoFactorMethod(),
             $u->twoFactorLastCode(),
@@ -1703,47 +1409,6 @@ final class SqlUserRepository implements UserRepository
             $u->id(),
         ]);
     }
-
-    private function hydrate(array $r): User {
-        return new User(
-            (int) $r['id'],
-            (string) $r['email'],
-            (string) $r['password_hash'],
-            (string) ($r['role'] ?? 'USER'),
-            (bool) $r['two_factor_enabled'],
-            (string) ($r['two_factor_method'] ?? 'email'),
-            $r['two_factor_last_code'] ?? null,
-            isset($r['two_factor_expires_at']) && $r['two_factor_expires_at']
-                ? new \DateTimeImmutable($r['two_factor_expires_at'])
-                : null,
-            $r['two_factor_phone'] ?? null,
-            $r['two_factor_totp_secret'] ?? null,
-        );
-    }
-    public function create(string $email, string $passwordHash, string $role = 'USER'): User
-{
-    $st = $this->pdo->prepare(
-        'INSERT INTO users (email, password_hash, role, two_factor_enabled, two_factor_method)
-         VALUES (?, ?, ?, 0, "email")'
-    );
-    $st->execute([$email, $passwordHash, $role]);
-
-    $id = (int) $this->pdo->lastInsertId();
-
-    return new User(
-        $id,
-        $email,
-        $passwordHash,
-        $role,
-        false,          // 2FA désactivée par défaut
-        'email',        // méthode par défaut
-        null,
-        null,
-        null,
-        null,
-    );
-}
-
 }
 
 
@@ -1970,14 +1635,6 @@ final class LoginUser
         private PasswordHasher $hasher,
     ) {}
 
-    /**
-     * Retourne :
-     * - en cas d'échec : ['success' => false]
-     * - en cas de succès sans 2FA :
-     *   ['success' => true, 'two_factor_required' => false, 'user_id' => int, 'role' => string]
-     * - en cas de succès avec 2FA :
-     *   ['success' => true, 'two_factor_required' => true, 'user_id' => int, 'role' => string]
-     */
     public function execute(string $email, string $password): array
     {
         $u = $this->users->findByEmail($email);
@@ -2075,35 +1732,37 @@ use App\Infrastructure\Security\PasswordHasher;
 final class RegisterUser
 {
     public function __construct(
-        private UserRepository $userRepository,
-        private PasswordHasher $passwordHasher,
-    ) {
-    }
+        private UserRepository $repo,
+        private PasswordHasher $hasher
+    ) {}
 
-    public function execute(string $email, string $plainPassword): array
-    {
-        $email = trim(strtolower($email));
-
-        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            throw new \InvalidArgumentException('Invalid email');
+    public function execute(
+        string $email,
+        string $password,
+        string $role= 'USER',
+        ?string $firstname,
+        ?string $lastname
+    ): array {
+        if ($this->repo->findByEmail($email)) {
+            throw new \RuntimeException("Email already in use");
         }
 
-        if (strlen($plainPassword) < 8) {
-            throw new \InvalidArgumentException('Password too short');
-        }
+        $hash = $this->hasher->hash($password);
 
-        if ($this->userRepository->findByEmail($email)) {
-            throw new \RuntimeException('Email already used');
-        }
-
-        $hash = $this->passwordHasher->hash($plainPassword);
-
-        $user = $this->userRepository->create($email, $hash, 'USER');
+        $user = $this->repo->create(
+            $email,
+            $hash,
+            $role,
+            $firstname,
+            $lastname
+        );
 
         return [
-            'id'    => $user->id(),
+            'id' => $user->id(),
             'email' => $user->email(),
-            'role'  => $user->role(),
+            'firstname' => $user->firstname(),
+            'lastname' => $user->lastname(),
+            'role' => $user->role(),
         ];
     }
 }
@@ -2278,20 +1937,342 @@ FILE: Backend/tests/Domain/JwtManagerTest.php
 <?php
 declare(strict_types=1);
 
-use PHPUnit\Framework\TestCase;
-use App\Infrastructure\Security\JwtManager;
+namespace Tests\Domain;
 
-final class JwtManagerTest extends TestCase {
-  public function testIssueAndDecode(): void {
-    $jwt = new JwtManager('secret', 600, 2592000);
-    [$access, $refresh] = $jwt->issueFor(7, 'OWNER');
-    $pa = $jwt->decode($access);
-    $this->assertSame(7, $pa['sub']);
-    $this->assertSame('OWNER', $pa['role']);
-    $this->assertSame('access', $pa['typ']);
-    $pr = $jwt->decode($refresh);
-    $this->assertSame('refresh', $pr['typ']);
-  }
+use App\Infrastructure\Security\JwtManager;
+use PHPUnit\Framework\TestCase;
+
+final class JwtManagerTest extends TestCase
+{
+    private JwtManager $jwt;
+
+    protected function setUp(): void
+    {
+
+        $this->jwt = new JwtManager('test-secret-key', 3600, 7200);
+    }
+
+    public function testIssueForReturnsTwoValidTokens(): void
+    {
+        [$access, $refresh] = $this->jwt->issueFor(42, 'USER');
+
+
+        $this->assertIsString($access);
+        $this->assertIsString($refresh);
+        $this->assertNotSame($access, $refresh);
+
+
+        $accessPayload  = $this->jwt->decode($access);
+        $refreshPayload = $this->jwt->decode($refresh);
+
+        $this->assertNotNull($accessPayload);
+        $this->assertNotNull($refreshPayload);
+
+        // Access token : bon sub / role / typ
+        $this->assertSame(42, $accessPayload['sub'] ?? null);
+        $this->assertSame('USER', $accessPayload['role'] ?? null);
+        $this->assertSame('access', $accessPayload['typ'] ?? null);
+
+        // Refresh token : bon sub / typ
+        $this->assertSame(42, $refreshPayload['sub'] ?? null);
+        $this->assertSame('refresh', $refreshPayload['typ'] ?? null);
+
+        // Les deux ont un exp
+        $this->assertArrayHasKey('exp', $accessPayload);
+        $this->assertArrayHasKey('exp', $refreshPayload);
+    }
+
+    public function testDecodeReturnsNullForInvalidToken(): void
+    {
+        $result = $this->jwt->decode('ceci-n-est-pas-un-jwt');
+        $this->assertNull($result);
+    }
+
+    public function testIssuePending2FATokenHasTypeP2(): void
+    {
+        $token   = $this->jwt->issuePending2FAToken(99);
+        $payload = $this->jwt->decode($token);
+
+        $this->assertNotNull($payload);
+        $this->assertSame(99, $payload['sub'] ?? null);
+        $this->assertSame('p2', $payload['typ'] ?? null);
+    }
+}
+
+
+
+================================================
+FILE: Backend/tests/Infrastructure/Security/PasswordHasherTest.php
+================================================
+<?php
+
+declare(strict_types=1);
+
+namespace Tests\Infrastructure\Security;
+
+use App\Infrastructure\Security\PasswordHasher;
+use PHPUnit\Framework\TestCase;
+
+final class PasswordHasherTest extends TestCase
+{
+    public function testHashIsNotPlainPassword(): void
+    {
+        $hasher = new PasswordHasher();
+        $plain  = 'MySecurePassword123!';
+        $hash   = $hasher->hash($plain);
+
+        $this->assertIsString($hash);
+        $this->assertNotSame($plain, $hash, 'Le hash ne doit pas être le mot de passe en clair');
+        $this->assertGreaterThan(20, strlen($hash), 'Le hash doit être suffisamment long');
+    }
+
+    public function testVerifyReturnsTrueWithCorrectPassword(): void
+    {
+        $hasher = new PasswordHasher();
+        $plain  = 'Secret123!';
+        $hash   = $hasher->hash($plain);
+
+        $this->assertTrue($hasher->verify($plain, $hash));
+    }
+
+    public function testVerifyReturnsFalseWithWrongPassword(): void
+    {
+        $hasher = new PasswordHasher();
+        $hash   = $hasher->hash('correct-password');
+
+        $this->assertFalse($hasher->verify('wrong-password', $hash));
+    }
+}
+
+
+
+================================================
+FILE: Backend/tests/UseCase/Auth/InMemoryUserRepository.php
+================================================
+<?php
+declare(strict_types=1);
+
+namespace Tests\UseCase\Auth;
+
+use App\Domain\Entity\User;
+use App\Domain\Repository\UserRepository;
+
+final class InMemoryUserRepository implements UserRepository
+{
+    /** @var User[] */
+    private array $users = [];
+    private int $autoIncrement = 1;
+
+    public function __construct(User ...$users)
+    {
+        foreach ($users as $user) {
+            $this->save($user);
+        }
+    }
+
+    public function create(
+        string $email,
+        string $passwordHash,
+        string $role = 'USER',
+        ?string $firstname = null,
+        ?string $lastname = null
+    ): User {
+        $user = new User(
+            $this->autoIncrement++,
+            $email,
+            $passwordHash,
+            $role,
+            $firstname,
+            $lastname,
+        );
+        $this->save($user);
+        return $user;
+    }
+
+    public function findById(int $id): ?User
+    {
+        return $this->users[$id] ?? null;
+    }
+
+    public function findByEmail(string $email): ?User
+    {
+        foreach ($this->users as $user) {
+            if ($user->email() === $email) {
+                return $user;
+            }
+        }
+        return null;
+    }
+
+    public function save(User $user): void
+    {
+        $this->users[$user->id()] = $user;
+
+        if ($user->id() >= $this->autoIncrement) {
+            $this->autoIncrement = $user->id() + 1;
+        }
+    }
+}
+
+
+
+================================================
+FILE: Backend/tests/UseCase/Auth/LoginUserTest.php
+================================================
+<?php
+declare(strict_types=1);
+
+namespace Tests\UseCase\Auth;
+
+use App\Domain\Entity\User;
+use App\Domain\Repository\UserRepository;
+use App\Infrastructure\Security\PasswordHasher;
+use App\UseCase\Auth\LoginUser;
+use PHPUnit\Framework\TestCase;
+
+/**
+ * Petit repository en mémoire uniquement pour les tests.
+ */
+final class InMemoryUserRepository implements UserRepository
+{
+    /** @var User[] */
+    private array $users = [];
+    private int $autoIncrement = 1;
+
+    public function __construct(User ...$users)
+    {
+        foreach ($users as $user) {
+            $this->save($user);
+        }
+    }
+
+    public function create(string $email, string $passwordHash, string $role = 'USER',    ?string $firstname = null,
+    ?string $lastname = null): User
+    {
+        $user = new User($this->autoIncrement++, $email, $passwordHash, $role);
+        $this->save($user);
+        return $user;
+    }
+
+    public function findById(int $id): ?User
+    {
+        return $this->users[$id] ?? null;
+    }
+
+    public function findByEmail(string $email): ?User
+    {
+        foreach ($this->users as $user) {
+            if ($user->email() === $email) {
+                return $user;
+            }
+        }
+        return null;
+    }
+
+    public function save(User $user): void
+    {
+        $this->users[$user->id()] = $user;
+
+        if ($user->id() >= $this->autoIncrement) {
+            $this->autoIncrement = $user->id() + 1;
+        }
+    }
+}
+
+/**
+ * Tests du cas d’usage LoginUser.
+ */
+final class LoginUserTest extends TestCase
+{
+    private PasswordHasher $hasher;
+
+    protected function setUp(): void
+    {
+        $this->hasher = new PasswordHasher();
+    }
+
+    public function testLoginSucceedsWithValidCredentialsAnd2FAEnabled(): void
+    {
+        $plain = 'MyStrongPassword!';
+        $hash  = $this->hasher->hash($plain);
+
+        // 2FA activée par défaut
+        $user = new User(
+            1,
+            'user@example.com',
+            $hash,
+            'USER'
+        );
+
+        $repo    = new InMemoryUserRepository($user);
+        $useCase = new LoginUser($repo, $this->hasher);
+
+        $result = $useCase->execute('user@example.com', $plain);
+
+        $this->assertTrue($result['success'] ?? false);
+        $this->assertTrue($result['two_factor_required'] ?? false);
+        $this->assertSame(1, $result['user_id'] ?? null);
+        $this->assertSame('USER', $result['role'] ?? null);
+    }
+
+    public function testLoginSucceedsWithValidCredentialsAnd2FADisabled(): void
+    {
+        $plain = 'MyStrongPassword!';
+        $hash  = $this->hasher->hash($plain);
+
+        // On désactive la 2FA via withTwoFactorConfig
+        $user = new User(
+            2,
+            'no2fa@example.com',
+            $hash,
+            'USER'
+        );
+        $user = $user->withTwoFactorConfig(false, 'email');
+
+        $repo    = new InMemoryUserRepository($user);
+        $useCase = new LoginUser($repo, $this->hasher);
+
+        $result = $useCase->execute('no2fa@example.com', $plain);
+
+        $this->assertTrue($result['success'] ?? false);
+        $this->assertFalse($result['two_factor_required'] ?? true);
+        $this->assertSame(2, $result['user_id'] ?? null);
+        $this->assertSame('USER', $result['role'] ?? null);
+    }
+
+    public function testLoginFailsWithWrongPassword(): void
+    {
+        $plain = 'MyStrongPassword!';
+        $hash  = $this->hasher->hash($plain);
+
+        $user = new User(
+            3,
+            'user@example.com',
+            $hash,
+            'USER'
+        );
+
+        $repo    = new InMemoryUserRepository($user);
+        $useCase = new LoginUser($repo, $this->hasher);
+
+        $result = $useCase->execute('user@example.com', 'wrong-password');
+
+        $this->assertFalse($result['success'] ?? true);
+        $this->assertArrayNotHasKey('user_id', $result);
+        $this->assertArrayNotHasKey('role', $result);
+    }
+
+    public function testLoginFailsWithUnknownUser(): void
+    {
+        $repo    = new InMemoryUserRepository(); // aucun user enregistré
+        $useCase = new LoginUser($repo, $this->hasher);
+
+        $result = $useCase->execute('doesnotexist@example.com', 'whatever');
+
+        $this->assertFalse($result['success'] ?? true);
+        $this->assertArrayNotHasKey('user_id', $result);
+        $this->assertArrayNotHasKey('role', $result);
+    }
 }
 
 
@@ -2768,6 +2749,7 @@ FILE: frontend/package.json
     ]
   },
   "dependencies": {
+    "motion": "^12.23.24",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router-dom": "^6.30.1",
@@ -2876,12 +2858,12 @@ function App() {
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
-        
+
         {/* Routes protégées */}
         <Route
           path="/dashboard-user"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute role="user">
               <UserDashboard />
             </ProtectedRoute>
           }
@@ -2889,19 +2871,19 @@ function App() {
         <Route
           path="/dashboard-owner"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute role="owner">
               <OwnerDashboard />
             </ProtectedRoute>
           }
         />
-        
+
         {/* Route publique pour les détails de parking */}
         <Route path="/parking/:id" element={<ParkingDetails />} />
-        
+
         {/* Redirection pour les routes obsolètes */}
         <Route path="/dashboard" element={<Navigate to="/dashboard-user" replace />} />
         <Route path="/owner" element={<Navigate to="/dashboard-owner" replace />} />
-        
+
         {/* Route 404 */}
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
@@ -3111,19 +3093,27 @@ FILE: frontend/src/components/Header.jsx
 ================================================
 import React from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { apiService } from "../services/apiService";
 
 export default function Header() {
   const navigate = useNavigate();
-  const token = localStorage.getItem("token");
   const userStr = localStorage.getItem("user");
   const user = userStr ? JSON.parse(userStr) : null;
-  const userRole = user?.role || null;
+  const userRole = user?.role?.toLowerCase()?.trim() || null;
 
-  const handleLogout = () => {
-    localStorage.removeItem("token");
+  const isLoggedIn = !!user;
+
+  const handleLogout = async () => {
+    try {
+      await apiService.logout();
+    } catch (e) {
+      console.error("Erreur lors de la déconnexion :", e);
+    }
     localStorage.removeItem("user");
     navigate("/");
   };
+
+
 
   return (
     <header className="fixed top-6 left-0 right-0 z-50 px-6">
@@ -3137,14 +3127,14 @@ export default function Header() {
 
         {/* Navigation centrale - Arrondie et séparée */}
         <nav className="flex items-center bg-gray-900 rounded-full shadow-2xl px-2 py-2">
-          <Link 
-            to="/" 
+          <Link
+            to="/"
             className="px-6 py-2.5 bg-white text-gray-900 rounded-full font-medium text-sm transition-all duration-300 hover:bg-gray-100"
           >
             Accueil
           </Link>
-          <a 
-            href="#services" 
+          <a
+            href="#services"
             onClick={(e) => {
               e.preventDefault();
               document.querySelector('#services')?.scrollIntoView({ behavior: 'smooth' });
@@ -3153,8 +3143,8 @@ export default function Header() {
           >
             Services
           </a>
-          <a 
-            href="#tarifs" 
+          <a
+            href="#tarifs"
             onClick={(e) => {
               e.preventDefault();
               document.querySelector('#tarifs')?.scrollIntoView({ behavior: 'smooth' });
@@ -3163,8 +3153,8 @@ export default function Header() {
           >
             Tarifs
           </a>
-          <a 
-            href="#villes" 
+          <a
+            href="#villes"
             onClick={(e) => {
               e.preventDefault();
               document.querySelector('#villes')?.scrollIntoView({ behavior: 'smooth' });
@@ -3176,26 +3166,26 @@ export default function Header() {
         </nav>
 
         {/* Boutons Connexion/Inscription ou Dashboard */}
-        {token ? (
+        {isLoggedIn ? (
           <div className="flex items-center gap-3">
-            {userRole === 'owner' ? (
-              <Link 
-                to="/dashboard-owner" 
-                className="bg-gray-900 text-white px-6 py-2.5 rounded-full font-light text-sm shadow-lg hover:bg-gray-800 transition-all duration-300"
+            {userRole === "owner" ? (
+              <Link
+                to="/dashboard-owner"
+                className="bg-gray-900 text-white px-6 py-2.5 rounded-full text-sm shadow-lg hover:bg-gray-800 transition-all duration-300"
               >
                 Dashboard
               </Link>
             ) : (
-              <Link 
-                to="/dashboard-user" 
-                className="bg-gray-900 text-white px-6 py-2.5 rounded-full font-light text-sm shadow-lg hover:bg-gray-800 transition-all duration-300"
+              <Link
+                to="/dashboard-user"
+                className="bg-gray-900 text-white px-6 py-2.5 rounded-full text-sm shadow-lg hover:bg-gray-800 transition-all duration-300"
               >
                 Mon compte
               </Link>
             )}
             <button
               onClick={handleLogout}
-              className="bg-primary text-white px-6 py-2.5 rounded-full font-light text-sm shadow-lg hover:bg-primary-800 transition-all duration-300"
+              className="bg-white text-gray-900 px-5 py-2.5 rounded-full text-sm shadow-lg hover:bg-gray-100 transition-all duration-300"
             >
               Déconnexion
             </button>
@@ -3204,18 +3194,19 @@ export default function Header() {
           <div className="flex items-center gap-3">
             <Link
               to="/login"
-              className="text-gray-900 bg-white border border-gray-200 px-6 py-2.5 rounded-full font-light text-sm shadow-lg hover:bg-gray-50 transition-all duration-300"
+              className="bg-white text-gray-900 px-5 py-2.5 rounded-full text-sm shadow-lg hover:bg-gray-100 transition-all duration-300"
             >
-              Connexion
+              Se connecter
             </Link>
             <Link
               to="/register"
-              className="bg-gray-900 text-white px-6 py-2.5 rounded-full font-light text-sm shadow-2xl hover:bg-gray-800 transition-all duration-300"
+              className="bg-primary text-white px-5 py-2.5 rounded-full text-sm shadow-lg hover:bg-primary/90 transition-all duration-300"
             >
-              Inscription
+              S'inscrire
             </Link>
           </div>
         )}
+
       </div>
     </header>
   );
@@ -3409,16 +3400,22 @@ FILE: frontend/src/components/ProtectedRoute.jsx
 import React from "react";
 import { Navigate } from "react-router-dom";
 
-export default function ProtectedRoute({ children }) {
-  const token = localStorage.getItem("token");
+export default function ProtectedRoute({ children, role }) {
+  const userStr = localStorage.getItem("user");
+  const user = userStr ? JSON.parse(userStr) : null;
 
-  if (!token) {
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  const userRole = user.role?.toLowerCase().trim();
+
+  if (role && userRole !== role.toLowerCase().trim()) {
     return <Navigate to="/login" replace />;
   }
 
   return children;
 }
-
 
 
 
@@ -3761,18 +3758,20 @@ export default function Dashboard() {
 ================================================
 FILE: frontend/src/pages/Login.jsx
 ================================================
+// frontend/src/pages/Login.jsx
 import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import Header from "../components/Header";
-import Footer from "../components/Footer";
 import { apiService } from "../services/apiService";
+import Header from "../components/Header";
+import Footer from "../components/Footer";  
 
 export default function Login() {
+  const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -3781,12 +3780,12 @@ export default function Login() {
 
     try {
       const result = await apiService.login(email, password);
-      
+
       if (result.success) {
-        localStorage.setItem("token", result.token);
         localStorage.setItem("user", JSON.stringify(result.user));
-        
-        if (result.user.role === 'owner') {
+
+        if (result.user.role?.toLowerCase?.().trim() === "owner") {
+
           navigate("/dashboard-owner");
         } else {
           navigate("/dashboard-user");
@@ -3902,7 +3901,7 @@ export default function OwnerDashboard() {
   const [showEditForm, setShowEditForm] = useState(null);
   const userStr = localStorage.getItem("user");
   const user = userStr ? JSON.parse(userStr) : null;
-  
+
   const [monthlyRevenue, setMonthlyRevenue] = useState(0);
   const [activeReservations, setActiveReservations] = useState(0);
   const [activeStationnements, setActiveStationnements] = useState(0);
@@ -3919,11 +3918,11 @@ export default function OwnerDashboard() {
   });
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (!token) {
-      navigate("/login");
-      return;
-    }
+    apiService.getCurrentUser().then((me) => {
+      if (!me || me.role !== "owner") {
+        navigate("/login");
+      }
+    });
 
     loadData();
   }, [navigate]);
@@ -3967,7 +3966,7 @@ export default function OwnerDashboard() {
 
     try {
       const result = await apiService.addParking(token, newParking);
-      
+
       if (result.success) {
         setParkings([...parkings, result.parking]);
         setNewParking({
@@ -4057,7 +4056,7 @@ export default function OwnerDashboard() {
               <h2 className="text-2xl font-serif font-normal mb-6 text-gray-900">
                 Ajouter un parking
               </h2>
-              
+
               <form onSubmit={handleAddParking} className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
@@ -4154,7 +4153,7 @@ export default function OwnerDashboard() {
                     />
                   </div>
                 </div>
-                
+
                 <div className="flex gap-4">
                   <button type="submit" className="bg-zenpark text-white px-8 py-3 rounded-xl hover:bg-zenpark-700 transition font-medium">
                     Ajouter le parking
@@ -4199,7 +4198,7 @@ export default function OwnerDashboard() {
                   <div key={parking.id} className="bg-white rounded-2xl shadow p-6">
                     <h3 className="text-xl font-semibold text-gray-900 mb-3">{parking.nom}</h3>
                     <p className="text-gray-600 text-sm mb-4">{parking.adresse}</p>
-                    
+
                     <div className="space-y-2 mb-4 text-sm">
                       <div className="flex justify-between">
                         <span className="text-gray-600">Places:</span>
@@ -4655,34 +4654,36 @@ export default function Register() {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError("");
-    setSuccess("");
-    setLoading(true);
+const handleSubmit = async (e) => {
+  e.preventDefault();
+  setError("");
+  setSuccess("");
+  setLoading(true);
 
-    try {
-      const result = await apiService.register(form);
-      
-      if (result.success) {
-        localStorage.setItem("token", result.token);
-        localStorage.setItem("user", JSON.stringify(result.user));
-        
-        setSuccess("Compte créé avec succès !");
-        setTimeout(() => {
-          if (result.user.role === 'owner') {
-            navigate("/dashboard-owner");
-          } else {
-            navigate("/dashboard-user");
-          }
-        }, 1500);
-      }
-    } catch (err) {
-      setError(err.message || "Erreur lors de l'inscription");
-    } finally {
-      setLoading(false);
+  try {
+    const result = await apiService.register(form);
+
+    if (result.success) {
+      // PLUS DE TOKEN, on stocke juste le user
+      localStorage.setItem("user", JSON.stringify(result.user));
+
+      setSuccess("Compte créé avec succès !");
+      setTimeout(() => {
+        if (result.user.role === "owner") {
+          navigate("/dashboard-owner");
+        } else {
+          navigate("/dashboard-user");
+        }
+      }, 1500);
+    } else {
+      setError("Impossible de créer le compte.");
     }
-  };
+  } catch (err) {
+    setError(err.message || "Erreur lors de l'inscription");
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-gray-50 to-white">
@@ -4873,58 +4874,79 @@ import { apiService } from "../services/apiService";
 
 export default function UserDashboard() {
   const navigate = useNavigate();
+
+  const [user, setUser] = useState(() => {
+    const userStr = localStorage.getItem("user");
+    return userStr ? JSON.parse(userStr) : null;
+  });
+
   const [reservations, setReservations] = useState([]);
   const [stationnements, setStationnements] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const userStr = localStorage.getItem("user");
-  const user = userStr ? JSON.parse(userStr) : null;
 
+  // Récupérer les infos de l'utilisateur depuis le back
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (!token) {
-      navigate("/login");
-      return;
-    }
+    const fetchUser = async () => {
+      setLoading(true);
+      setError("");
 
-    loadData();
+      try {
+        const currentUser = await apiService.getCurrentUser();
+
+        if (!currentUser) {
+          // Pas connecté côté back → on redirige
+          navigate("/login");
+          return;
+        }
+
+        setUser(currentUser);
+        // On synchronise localStorage au cas où
+        localStorage.setItem("user", JSON.stringify(currentUser));
+
+        // TODO: plus tard, quand les API existeront :
+        // const reservationsRes = await apiService.getReservations();
+        // setReservations(reservationsRes.reservations || []);
+        // const stationnementsRes = await apiService.getStationnements();
+        // setStationnements(stationnementsRes.stationnements || []);
+      } catch (err) {
+        console.error(err);
+        setError(
+          err.message || "Erreur lors du chargement des informations utilisateur"
+        );
+        navigate("/login");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUser();
   }, [navigate]);
-
-  const loadData = async () => {
-    const token = localStorage.getItem("token");
-    setLoading(true);
-    setError("");
-
-    try {
-      const reservationsResult = await apiService.getReservations(token);
-      if (reservationsResult.success) {
-        setReservations(reservationsResult.reservations || []);
-      }
-
-      const stationnementsResult = await apiService.getStationnements(token);
-      if (stationnementsResult.success) {
-        setStationnements(stationnementsResult.stationnements || []);
-      }
-    } catch (err) {
-      setError(err.message || "Erreur lors du chargement des données");
-    } finally {
-      setLoading(false);
-    }
-  };
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
       <Header />
-      <main className="flex-1">
+      <main className="flex-1 pt-28">
         {/* Hero Section */}
         <section className="bg-zenpark text-white py-12">
           <div className="container mx-auto px-6 lg:px-12">
             <h1 className="text-4xl font-serif font-normal mb-2">
-              Bonjour {user?.firstname || 'Utilisateur'}
+              Bonjour{" "}
+              {user?.email
+                ? user.email
+                : "Utilisateur"}
             </h1>
             <p className="text-white/90 text-lg">
               Bienvenue sur votre espace personnel
             </p>
+            {user?.role && (
+              <p className="mt-2 text-white/80 text-sm">
+                Rôle :{" "}
+                <span className="inline-block px-3 py-1 rounded-full bg-white/10 border border-white/20">
+                  {user.role === "owner" ? "Propriétaire de parking" : "Client"}
+                </span>
+              </p>
+            )}
           </div>
         </section>
 
@@ -4934,6 +4956,32 @@ export default function UserDashboard() {
               {error}
             </div>
           )}
+
+          {/* Carte infos utilisateur */}
+          <section className="mb-10">
+            <div className="bg-white rounded-2xl shadow p-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+              <div>
+                <h2 className="text-2xl font-serif font-normal text-gray-900 mb-1">
+                  Mes informations
+                </h2>
+                <p className="text-gray-600 text-sm">
+                  Récapitulatif de votre compte Parking Project.
+                </p>
+              </div>
+              {user && (
+                <div className="space-y-1 text-sm text-gray-700">
+                  <p>
+                    <span className="font-medium">Email :</span>{" "}
+                    {user.email}
+                  </p>
+                  <p>
+                    <span className="font-medium">Rôle :</span>{" "}
+                    {user.role === "owner" ? "Propriétaire" : "Utilisateur"}
+                  </p>
+                </div>
+              )}
+            </div>
+          </section>
 
           {/* Quick Actions */}
           <div className="mb-12">
@@ -4958,7 +5006,7 @@ export default function UserDashboard() {
             ) : reservations.length === 0 ? (
               <div className="bg-white rounded-2xl shadow p-12 text-center">
                 <p className="text-gray-600 mb-6">
-                  Vous n'avez aucune réservation pour le moment.
+                  Vous n&apos;avez aucune réservation pour le moment.
                 </p>
                 <Link
                   to="/"
@@ -4977,20 +5025,26 @@ export default function UserDashboard() {
                     <h3 className="text-xl font-semibold text-gray-900 mb-3">
                       {reservation.parking_nom || "Parking"}
                     </h3>
-                    
+
                     <div className="space-y-2 mb-4">
                       <p className="text-gray-600 text-sm">
                         {reservation.date_debut && reservation.date_fin
-                          ? `${new Date(reservation.date_debut).toLocaleDateString('fr-FR')} - ${new Date(reservation.date_fin).toLocaleDateString('fr-FR')}`
+                          ? `${new Date(
+                              reservation.date_debut
+                            ).toLocaleDateString("fr-FR")} - ${new Date(
+                              reservation.date_fin
+                            ).toLocaleDateString("fr-FR")}`
                           : "Date non spécifiée"}
                       </p>
                       <p className="text-gray-700">
-                        <span className="font-medium">Statut:</span>{" "}
-                        <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${
-                          reservation.statut === 'confirmée' 
-                            ? 'bg-green-100 text-green-800' 
-                            : 'bg-yellow-100 text-yellow-800'
-                        }`}>
+                        <span className="font-medium">Statut :</span>{" "}
+                        <span
+                          className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${
+                            reservation.statut === "confirmée"
+                              ? "bg-green-100 text-green-800"
+                              : "bg-yellow-100 text-yellow-800"
+                          }`}
+                        >
                           {reservation.statut || "En attente"}
                         </span>
                       </p>
@@ -5000,7 +5054,7 @@ export default function UserDashboard() {
                         </p>
                       )}
                     </div>
-                    
+
                     <Link
                       to={`/parking/${reservation.parking_id}`}
                       className="block w-full text-center bg-gray-100 text-gray-900 py-2 rounded-xl hover:bg-gray-200 transition font-medium"
@@ -5019,7 +5073,7 @@ export default function UserDashboard() {
               <h2 className="text-3xl font-serif font-normal mb-6 text-gray-900">
                 Stationnements actifs
               </h2>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {stationnements.map((stationnement) => (
                   <div
@@ -5035,10 +5089,13 @@ export default function UserDashboard() {
                         <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
                       </span>
                     </div>
-                    
+
                     <p className="text-gray-600 text-sm">
-                      Début: {stationnement.date_debut
-                        ? new Date(stationnement.date_debut).toLocaleString('fr-FR')
+                      Début :{" "}
+                      {stationnement.date_debut
+                        ? new Date(
+                            stationnement.date_debut
+                          ).toLocaleString("fr-FR")
                         : "N/A"}
                     </p>
                   </div>
@@ -5074,450 +5131,298 @@ export const routes = {
 ================================================
 FILE: frontend/src/services/apiService.js
 ================================================
+// frontend/src/services/apiService.js
+const API_BASE_URL = "http://localhost:8001";
+
+async function handleResponse(response) {
+  let data = null;
+  try {
+    data = await response.json();
+  } catch {
+    // certains endpoints peuvent ne pas renvoyer de JSON
+  }
+
+  if (!response.ok) {
+    const message =
+      data?.error ||
+      data?.message ||
+      `Erreur API (${response.status})`;
+    throw new Error(message);
+  }
+
+  return data;
+}
+
 /**
- * Service API simulé pour les appels backend
- * Tous les appels sont simulés pour l'instant jusqu'à la connexion au backend PHP
+ * Helper interne :
+ * - fait le fetch avec credentials: "include"
+ * - sur 401, tente un refresh puis rejoue la requête une fois
  */
+async function authFetch(path, options = {}, retry = true) {
+  const res = await fetch(`${API_BASE_URL}${path}`, {
+    credentials: "include",
+    ...options,
+  });
 
-const API_BASE_URL = 'http://localhost:8001/api';
+  if (res.status === 401 && retry) {
+    // tentative de refresh silencieux
+    const refreshed = await apiService.refresh();
+    if (!refreshed) {
+      return res; // token mort, on laisse la 401
+    }
 
-// Simuler un délai de réponse réseau
-const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-
-// Mock data pour les tests
-const mockUsers = {
-  'user@example.com': {
-    id: 1,
-    email: 'user@example.com',
-    password: 'password123',
-    firstname: 'Jean',
-    lastname: 'Dupont',
-    role: 'user',
-    token: 'mock-token-user-123',
-    reservations: [],
-    stationnements: [],
-    typeAbonnement: 'gratuit',
-    debutAbonnement: null,
-    finAbonnement: null
-  },
-  'owner@example.com': {
-    id: 2,
-    email: 'owner@example.com',
-    password: 'password123',
-    firstname: 'Marie',
-    lastname: 'Martin',
-    role: 'owner',
-    token: 'mock-token-owner-456',
-    reservations: [],
-    stationnements: [],
-    typeAbonnement: 'premium',
-    debutAbonnement: '2025-01-01',
-    finAbonnement: '2025-12-31'
+    // on rejoue la requête UNE seule fois
+    return authFetch(path, options, false);
   }
-};
 
-const mockParkings = [
-  {
-    id: 1,
-    nom: 'Parking Centre-Ville',
-    adresse: '15 Rue de la République, 75001 Paris',
-    nombre_places: 50,
-    places_disponibles: 35,
-    tarif_horaire: 2.5,
-    tarif_journalier: 15,
-    tarif_mensuel: 120,
-    horaire_ouverture: '06:00',
-    horaire_fermeture: '23:00'
-  },
-  {
-    id: 2,
-    nom: 'Parking Gare',
-    adresse: '8 Avenue de la Gare, 69000 Lyon',
-    nombre_places: 100,
-    places_disponibles: 67,
-    tarif_horaire: 3,
-    tarif_journalier: 18,
-    tarif_mensuel: 150,
-    horaire_ouverture: '05:00',
-    horaire_fermeture: '00:00'
-  }
-];
+  return res;
+}
 
-const mockReservations = [
-  {
-    id: 1,
-    parking_id: 1,
-    parking_nom: 'Parking Centre-Ville',
-    date_debut: '2025-01-15T10:00:00',
-    date_fin: '2025-01-15T18:00:00',
-    statut: 'confirmée',
-    montant: 20
-  }
-];
-
-// Service API
 export const apiService = {
   /**
-   * Connexion utilisateur
+   * Connexion utilisateur :
+   * - POST /api/auth/login
+   * - puis /api/me via authFetch (token fraîchement posé)
    */
   async login(email, password) {
-    await delay(500);
-    
-    const user = mockUsers[email];
-    if (user && user.password === password) {
-      return {
-        success: true,
-        token: user.token,
-        user: {
-          id: user.id,
-          email: user.email,
-          firstname: user.firstname,
-          lastname: user.lastname,
-          role: user.role,
-          reservations: user.reservations,
-          stationnements: user.stationnements,
-          typeAbonnement: user.typeAbonnement,
-          debutAbonnement: user.debutAbonnement,
-          finAbonnement: user.finAbonnement
-        }
+    const res = await fetch(`${API_BASE_URL}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ email, password }),
+    });
+
+    const data = await handleResponse(res);
+
+    if (data.status === "2fa_required") {
+      throw new Error(
+        "Double authentification requise (2FA), pas encore gérée côté interface."
+      );
+    }
+
+    const meRes = await authFetch("/api/me", {
+      method: "GET",
+    });
+
+    const me = await handleResponse(meRes);
+
+    return {
+      success: true,
+      user: {
+        id: me.id,
+        email: me.email,
+        firstname: me.firstname,
+        lastname: me.lastname,
+        role: me.role ? me.role.toLowerCase().trim() : "user",
+
+      },
+    };
+  },
+
+  /**
+   * Inscription :
+   * - POST /api/auth/register
+   * - puis login auto
+   */
+  async register(form) {
+    const res = await fetch(`${API_BASE_URL}/api/auth/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        firstname: form.firstname,
+        lastname: form.lastname,
+        email: form.email,
+        password: form.password,
+        role: form.role === "owner" ? "OWNER" : "USER",
+      }),
+    });
+
+    const data = await handleResponse(res);
+
+    // le back pose déjà les cookies ici.
+    // maintenant on récupère /api/me comme dans login()
+    const meRes = await authFetch("/api/me", { method: "GET" });
+    const me = await handleResponse(meRes);
+
+    return {
+      success: true,
+      user: {
+        id: me.id,
+        email: me.email,
+        role: me.role ? me.role.toLowerCase().trim() : "user",
+        firstname: me.firstname,
+        lastname: me.lastname,
+      },
+    };
+  }
+  ,
+
+  /**
+   * Récupère l'utilisateur courant :
+   * - GET /api/me
+   * - si 401 → tente un refresh → rejoue /api/me
+   * - si toujours 401 → retourne null
+   */
+  async getCurrentUser() {
+    const res = await authFetch("/api/me", {
+      method: "GET",
+    });
+
+    if (res.status === 401) {
+      // même après refresh → pas connecté
+      return null;
+    }
+
+    const me = await handleResponse(res);
+
+    return {
+      id: me.id,
+      email: me.email,
+      role: me.role ? me.role.toLowerCase().trim() : "user",
+
+    };
+  },
+
+  /**
+   * Appelle /api/auth/refresh pour obtenir un nouveau ACCESS_TOKEN
+   * Retourne true si ça a marché, false sinon.
+   */
+  async refresh() {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
+        method: "POST",
+        credentials: "include",
+      });
+
+      if (!res.ok) {
+        return false;
+      }
+
+      await handleResponse(res); // on ignore le contenu, on veut juste savoir si c'est ok
+      return true;
+    } catch {
+      return false;
+    }
+  },
+
+  /**
+   * Déconnexion : purge les cookies côté back
+   */
+  async logout() {
+    await fetch(`${API_BASE_URL}/api/auth/logout`, {
+      method: "POST",
+      credentials: "include",
+    });
+  },
+};
+
+
+
+================================================
+FILE: frontend/src/UI/Countup.jsx
+================================================
+import { useInView, useMotionValue, useSpring } from 'motion/react';
+import { useCallback, useEffect, useRef } from 'react';
+
+export default function CountUp({
+  to,
+  from = 0,
+  direction = 'up',
+  delay = 0,
+  duration = 2,
+  className = '',
+  startWhen = true,
+  separator = '',
+  onStart,
+  onEnd
+}) {
+  const ref = useRef(null);
+  const motionValue = useMotionValue(direction === 'down' ? to : from);
+
+  const damping = 20 + 40 * (1 / duration);
+  const stiffness = 100 * (1 / duration);
+
+  const springValue = useSpring(motionValue, {
+    damping,
+    stiffness
+  });
+
+  const isInView = useInView(ref, { once: true, margin: '0px' });
+
+  const getDecimalPlaces = num => {
+    const str = num.toString();
+
+    if (str.includes('.')) {
+      const decimals = str.split('.')[1];
+
+      if (parseInt(decimals) !== 0) {
+        return decimals.length;
+      }
+    }
+
+    return 0;
+  };
+
+  const maxDecimals = Math.max(getDecimalPlaces(from), getDecimalPlaces(to));
+
+  const formatValue = useCallback(
+    latest => {
+      const hasDecimals = maxDecimals > 0;
+
+      const options = {
+        useGrouping: !!separator,
+        minimumFractionDigits: hasDecimals ? maxDecimals : 0,
+        maximumFractionDigits: hasDecimals ? maxDecimals : 0
+      };
+
+      const formattedNumber = Intl.NumberFormat('en-US', options).format(latest);
+
+      return separator ? formattedNumber.replace(/,/g, separator) : formattedNumber;
+    },
+    [maxDecimals, separator]
+  );
+
+  useEffect(() => {
+    if (ref.current) {
+      ref.current.textContent = formatValue(direction === 'down' ? to : from);
+    }
+  }, [from, to, direction, formatValue]);
+
+  useEffect(() => {
+    if (isInView && startWhen) {
+      if (typeof onStart === 'function') onStart();
+
+      const timeoutId = setTimeout(() => {
+        motionValue.set(direction === 'down' ? from : to);
+      }, delay * 1000);
+
+      const durationTimeoutId = setTimeout(
+        () => {
+          if (typeof onEnd === 'function') onEnd();
+        },
+        delay * 1000 + duration * 1000
+      );
+
+      return () => {
+        clearTimeout(timeoutId);
+        clearTimeout(durationTimeoutId);
       };
     }
-    
-    throw new Error('Email ou mot de passe incorrect');
-  },
+  }, [isInView, startWhen, motionValue, direction, from, to, delay, onStart, onEnd, duration]);
 
-  /**
-   * Inscription utilisateur
-   */
-  async register(userData) {
-    await delay(500);
-    
-    // Simuler une inscription réussie
-    const newUser = {
-      id: Date.now(),
-      ...userData,
-      token: `mock-token-${userData.role}-${Date.now()}`,
-      reservations: [],
-      stationnements: [],
-      typeAbonnement: 'gratuit', // Par défaut, tous les nouveaux utilisateurs sont en mode gratuit
-      debutAbonnement: null,
-      finAbonnement: null
-    };
-    
-    mockUsers[userData.email] = newUser;
-    
-    return {
-      success: true,
-      message: 'Compte créé avec succès',
-      token: newUser.token,
-      user: {
-        id: newUser.id,
-        email: newUser.email,
-        firstname: newUser.firstname,
-        lastname: newUser.lastname,
-        role: newUser.role,
-        reservations: newUser.reservations,
-        stationnements: newUser.stationnements,
-        typeAbonnement: newUser.typeAbonnement,
-        debutAbonnement: newUser.debutAbonnement,
-        finAbonnement: newUser.finAbonnement
+  useEffect(() => {
+    const unsubscribe = springValue.on('change', latest => {
+      if (ref.current) {
+        ref.current.textContent = formatValue(latest);
       }
-    };
-  },
-
-  /**
-   * Récupérer les réservations de l'utilisateur
-   */
-  async getReservations(token) {
-    await delay(500);
-    
-    if (!token) {
-      throw new Error('Token manquant');
-    }
-    
-    return {
-      success: true,
-      reservations: mockReservations
-    };
-  },
-
-  /**
-   * Récupérer les stationnements actifs de l'utilisateur
-   */
-  async getStationnements(token) {
-    await delay(500);
-    
-    if (!token) {
-      throw new Error('Token manquant');
-    }
-    
-    // Simuler les stationnements actifs
-    return {
-      success: true,
-      stationnements: mockReservations.filter(r => r.statut === 'confirmée')
-    };
-  },
-
-  /**
-   * Récupérer les abonnements de l'utilisateur
-   */
-  async getAbonnements(token) {
-    await delay(500);
-    
-    if (!token) {
-      throw new Error('Token manquant');
-    }
-    
-    return {
-      success: true,
-      abonnements: []
-    };
-  },
-
-  /**
-   * Récupérer les parkings du propriétaire
-   */
-  async getOwnerParkings(token) {
-    await delay(500);
-    
-    if (!token) {
-      throw new Error('Token manquant');
-    }
-    
-    return {
-      success: true,
-      parkings: mockParkings
-    };
-  },
-
-  /**
-   * Ajouter un parking (propriétaire)
-   */
-  async addParking(token, parkingData) {
-    await delay(500);
-    
-    if (!token) {
-      throw new Error('Token manquant');
-    }
-    
-    const newParking = {
-      id: Date.now(),
-      ...parkingData,
-      places_disponibles: parkingData.nombre_places
-    };
-    
-    mockParkings.push(newParking);
-    
-    return {
-      success: true,
-      parking: newParking
-    };
-  },
-
-  /**
-   * Récupérer les détails d'un parking
-   */
-  async getParkingDetails(parkingId) {
-    await delay(500);
-    
-    const parking = mockParkings.find(p => p.id === parseInt(parkingId));
-    
-    if (!parking) {
-      throw new Error('Parking non trouvé');
-    }
-    
-    return {
-      success: true,
-      parking
-    };
-  },
-
-  /**
-   * Réserver un parking
-   */
-  async reserveParking(token, parkingId, reservationData) {
-    await delay(500);
-    
-    if (!token) {
-      throw new Error('Token manquant');
-    }
-    
-    const parking = mockParkings.find(p => p.id === parseInt(parkingId));
-    
-    if (!parking) {
-      throw new Error('Parking non trouvé');
-    }
-    
-    const newReservation = {
-      id: Date.now(),
-      parking_id: parkingId,
-      parking_nom: parking.nom,
-      ...reservationData,
-      statut: 'confirmée'
-    };
-    
-    mockReservations.push(newReservation);
-    
-    return {
-      success: true,
-      reservation: newReservation
-    };
-  },
-
-  /**
-   * Récupérer les revenus mensuels (propriétaire)
-   */
-  async getMonthlyRevenue(token) {
-    await delay(500);
-    
-    if (!token) {
-      throw new Error('Token manquant');
-    }
-    
-    return {
-      success: true,
-      revenus_mensuels: 2450.50
-    };
-  },
-
-  /**
-   * Récupérer les réservations en cours (propriétaire)
-   */
-  async getActiveReservations(token) {
-    await delay(500);
-    
-    if (!token) {
-      throw new Error('Token manquant');
-    }
-    
-    return {
-      success: true,
-      reservations_en_cours: 12
-    };
-  },
-
-  /**
-   * Récupérer les stationnements actifs (propriétaire)
-   */
-  async getActiveStationnements(token) {
-    await delay(500);
-    
-    if (!token) {
-      throw new Error('Token manquant');
-    }
-    
-    return {
-      success: true,
-      stationnements_actifs: 8
-    };
-  },
-
-  /**
-   * Récupérer les informations complètes de l'utilisateur
-   */
-  async getUserProfile(token) {
-    await delay(500);
-    
-    if (!token) {
-      throw new Error('Token manquant');
-    }
-    
-    // Trouver l'utilisateur par son token
-    const user = Object.values(mockUsers).find(u => u.token === token);
-    
-    if (!user) {
-      throw new Error('Utilisateur non trouvé');
-    }
-    
-    return {
-      success: true,
-      user: {
-        id: user.id,
-        email: user.email,
-        firstname: user.firstname,
-        lastname: user.lastname,
-        role: user.role,
-        reservations: user.reservations,
-        stationnements: user.stationnements,
-        typeAbonnement: user.typeAbonnement,
-        debutAbonnement: user.debutAbonnement,
-        finAbonnement: user.finAbonnement
-      }
-    };
-  },
-
-  /**
-   * Mettre à niveau l'abonnement de l'utilisateur
-   */
-  async upgradeAbonnement(token, typeAbonnement, dureeEnMois = 1) {
-    await delay(500);
-    
-    if (!token) {
-      throw new Error('Token manquant');
-    }
-    
-    // Trouver l'utilisateur par son token
-    const user = Object.values(mockUsers).find(u => u.token === token);
-    
-    if (!user) {
-      throw new Error('Utilisateur non trouvé');
-    }
-    
-    // Calculer les dates de début et fin
-    const debutAbonnement = new Date().toISOString().split('T')[0];
-    const finDate = new Date();
-    finDate.setMonth(finDate.getMonth() + dureeEnMois);
-    const finAbonnement = finDate.toISOString().split('T')[0];
-    
-    // Mettre à jour l'utilisateur
-    user.typeAbonnement = typeAbonnement;
-    user.debutAbonnement = debutAbonnement;
-    user.finAbonnement = finAbonnement;
-    
-    return {
-      success: true,
-      message: `Abonnement ${typeAbonnement} activé avec succès`,
-      user: {
-        typeAbonnement: user.typeAbonnement,
-        debutAbonnement: user.debutAbonnement,
-        finAbonnement: user.finAbonnement
-      }
-    };
-  }
-};
-
-// Fonction helper pour les appels API réels (à utiliser quand le backend sera connecté)
-export const apiCall = async (endpoint, options = {}) => {
-  const token = localStorage.getItem('token');
-  
-  const headers = {
-    'Content-Type': 'application/json',
-    ...options.headers
-  };
-  
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-  
-  try {
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-      ...options,
-      headers
     });
-    
-    const data = await response.json();
-    
-    if (!response.ok) {
-      throw new Error(data.message || 'Erreur API');
-    }
-    
-    return data;
-  } catch (error) {
-    console.error('Erreur API:', error);
-    throw error;
-  }
-};
 
+    return () => unsubscribe();
+  }, [springValue, formatValue]);
+
+  return <span className={className} ref={ref} />;
+}
 
 
 

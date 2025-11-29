@@ -3,7 +3,7 @@ import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { apiService } from "../services/apiService";
 import Header from "../components/Header";
-import Footer from "../components/Footer";  
+import Footer from "../components/Footer";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -22,10 +22,10 @@ export default function Login() {
       const result = await apiService.login(email, password);
 
       if (result.success) {
-        localStorage.setItem("user", JSON.stringify(result.user));
+        // ❌ remove localStorage
+        // localStorage.setItem("user", JSON.stringify(result.user));
 
-        if (result.user.role?.toLowerCase?.().trim() === "owner") {
-
+        if (result.user.role === "owner") {
           navigate("/dashboard-owner");
         } else {
           navigate("/dashboard-user");
