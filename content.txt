@@ -1,0 +1,5479 @@
+================================================
+FILE: README.md
+================================================
+# Parking_project – Auth JWT + 2FA (PHP)
+
+Backend PHP minimaliste avec JWT (cookies HttpOnly), refresh token, rôles, et double authentification (code à 6 chiffres).  
+Fonctionne en local avec XAMPP/MySQL et le serveur PHP intégré.
+
+---
+
+## 1) Prérequis
+
+- PHP >= 8.2 (Argon2id activé)
+- Composer
+- MySQL (XAMPP ok)
+- Windows PowerShell (ou terminal au choix)
+
+---
+
+## 2) Cloner & installer
+
+```
+git clone https://github.com/gladiaaa/Parking_project.git
+cd Parking_project/Backend
+composer install
+```
+
+## BDD :
+
+CREATE DATABASE IF NOT EXISTS `parking_app`
+  DEFAULT CHARACTER SET utf8mb4
+  DEFAULT COLLATE utf8mb4_unicode_ci;
+USE `parking_app`;
+
+CREATE TABLE IF NOT EXISTS `users` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `email` VARCHAR(190) NOT NULL,
+  `password_hash` VARCHAR(255) NOT NULL,
+  `role` ENUM('USER','OWNER','ADMIN','SUPEROWNER') NOT NULL DEFAULT 'USER',
+  `two_factor_enabled` TINYINT(1) NOT NULL DEFAULT 0,
+  `two_factor_method` ENUM('email','totp') NOT NULL DEFAULT 'email',
+  `two_factor_last_code` VARCHAR(10) DEFAULT NULL,
+  `two_factor_expires_at` DATETIME DEFAULT NULL,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uniq_user_email` (`email`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- utilisateur de test (mot de passe: test)
+INSERT INTO users (email, password_hash, role, two_factor_enabled) VALUES
+('test@test.com', '$argon2id$v=19$m=65536,t=4,p=1$Y2hhdGdwdDQ1MWY1MDMxZw$SKdPO8vb4ks2+uV8cxQXf2WcT1QPhVbGi3SOBtyd9lc', 'USER', 0)
+ON DUPLICATE KEY UPDATE email=email;
+
+
+---
+
+## 5) Lancer en local (2 ports)
+
+Le serveur PHP intégré ne peut pas auto-appeler la même instance pendant une requête.
+On sépare API et pages de test :
+
+Terminal A (API)
+
+cd Parking_project/Backend
+php -S localhost:8001 -t public
+
+
+Terminal B (pages PHP de test)
+
+cd Parking_project/Backend
+php -S localhost:8000 -t public
+
+
+Les pages login.php, verify_2fa.php, me.php, logout.php utilisent l’API sur http://localhost:8001/api.
+(Variable $api déclarée en haut de chaque fichier)
+
+## 6) Tester rapidement
+Endpoints
+
+Santé : http://localhost:8001/health
+
+Ping DB : http://localhost:8001/db/ping
+
+Pages de test
+
+Login : http://localhost:8000/login.php
+
+2FA : http://localhost:8000/verify_2fa.php
+
+Profil : http://localhost:8000/me.php
+
+Flux
+
+Connecte-toi avec test@test.com / test → redirection /me.php.
+
+Activer la 2FA si besoin :
+
+UPDATE users SET two_factor_enabled = 1 WHERE email='test@test.com';
+
+
+Re-login → redirection vers /verify_2fa.php → saisis le code affiché dans les logs → /me.php.
+
+## 7) Scripts utiles
+
+Changer un mot de passe (outil CLI) :
+
+php Backend/tools/set_user_password.php <email> <plain>
+
+
+(si le fichier n’existe pas, crée-le d’après l’exemple fourni dans la discussion)
+
+Lancer les tests (si tu utilises PHPUnit) :
+```
+cd Backend
+composer require --dev phpunit/phpunit:^11
+./vendor/bin/phpunit
+```
+# ProjecT_Parc
+Gestionnaire de places de parking
+
+
+## Création de la bdd :
+
+mysql -u root -h 127.0.0.1 -P 3306 < sql/001_init_core.sql
+
+
+
+
+================================================
+FILE: RESUME_PROJET.md
+================================================
+# 📋 RÉSUMÉ DU PROJET - SYSTÈME DE PARKING PARTAGÉ
+
+## 🎯 CONTEXTE DU PROJET
+
+Projet HETIC 3ᵉ année : **Système de Parking Partagé**
+
+Le projet consiste à créer une application web complète permettant la gestion de parkings partagés.
+- **Backend** : PHP pur (sans framework), organisé selon la **Clean Architecture**
+- **Frontend** : React (sans Next.js ni Vite) avec **TailwindCSS**
+
+---
+
+## ✅ PARTIE FRONTEND RÉALISÉE
+
+### 📁 STRUCTURE DU FRONTEND
+
+```
+frontend/
+├── src/
+│   ├── components/ → composants réutilisables
+│   │   ├── Header.jsx → Navigation avec gestion des rôles
+│   │   ├── Footer.jsx → Pied de page
+│   │   ├── SearchBar.jsx → Barre de recherche
+│   │   ├── ParkingCard.jsx → Carte d'affichage parking
+│   │   └── ProtectedRoute.jsx → Protection des routes
+│   ├── pages/ → pages principales
+│   │   ├── Home.jsx → Page d'accueil
+│   │   ├── Login.jsx → Connexion
+│   │   ├── Register.jsx → Inscription avec choix de rôle
+│   │   ├── UserDashboard.jsx → Dashboard utilisateur
+│   │   ├── OwnerDashboard.jsx → Dashboard propriétaire
+│   │   └── ParkingDetails.jsx → Détails d'un parking
+│   ├── routes/ → configuration des routes
+│   │   └── index.jsx
+│   ├── services/ → appels API simulés
+│   │   └── apiService.js → Service API mock complet
+│   ├── App.jsx → Configuration React Router
+│   ├── index.css → TailwindCSS
+│   └── index.js → Point d'entrée
+├── public/
+│   └── index.html
+├── package.json
+├── tailwind.config.js
+├── postcss.config.js
+└── README.md
+```
+
+### 🎨 DESIGN RÉALISÉ
+
+- Style **moderne et épuré** (blanc avec accent vert #34A853)
+- Utilisation de **TailwindCSS** pour toute la mise en page
+- Design **responsive** (mobile, tablette, desktop)
+- Typographie : **Poppins** et **Inter**
+- Boutons et cartes avec coins arrondis, ombres légères
+- **Navbar** en haut, **Footer** en bas
+
+### 📄 PAGES CRÉÉES
+
+#### 1. **Accueil (`Home.jsx`)**
+- ✅ Présentation du concept "Parking partagé"
+- ✅ Boutons "Se connecter" et "Créer un compte"
+- ✅ Section "Comment ça marche" (3 étapes illustrées)
+- ✅ Section "Nos avantages"
+- ✅ Section "Villes disponibles" (Paris, Lyon, Marseille)
+- ✅ Section "Avis utilisateurs"
+- ✅ Footer simple avec contact
+
+#### 2. **Inscription (`Register.jsx`)**
+- ✅ Formulaire avec :
+  - Nom
+  - Prénom
+  - Email
+  - Mot de passe
+  - **Choix du rôle : "Utilisateur" ou "Propriétaire"**
+- ✅ Bouton "Créer un compte"
+- ✅ Redirection automatique selon le rôle
+
+#### 3. **Connexion (`Login.jsx`)**
+- ✅ Email + Mot de passe
+- ✅ Bouton "Se connecter"
+- ✅ Lien "Créer un compte"
+- ✅ Redirection selon le rôle (user/owner)
+
+#### 4. **Dashboard Utilisateur (`UserDashboard.jsx`)**
+- ✅ Liste de ses réservations
+- ✅ Liste de ses stationnements actifs
+- ✅ Bouton "Réserver une place"
+- ✅ Bouton "Voir mes abonnements"
+- ✅ Statuts visuels (confirmée, en attente)
+
+#### 5. **Dashboard Propriétaire (`OwnerDashboard.jsx`)**
+- ✅ Liste de ses parkings
+- ✅ Bouton "Ajouter un parking"
+- ✅ **Chiffre d'affaires mensuel** (section dédiée)
+- ✅ **Réservations en cours** (section dédiée)
+- ✅ **Stationnements actifs** (section dédiée)
+- ✅ Formulaire pour modifier les tarifs
+- ✅ Formulaire pour modifier les horaires
+
+#### 6. **Page Détails Parking (`ParkingDetails.jsx`)**
+- ✅ Détails d'un parking (adresse, places dispo, tarifs)
+- ✅ Formulaire de réservation
+- ✅ Choix du type : horaire, journalier, mensuel
+- ✅ Calcul du prix estimé
+- ✅ Bouton "Réserver"
+
+### 🔗 ROUTES CONFIGURÉES
+
+```javascript
+/ → Accueil
+/login → Connexion
+/register → Inscription
+/dashboard-user → Dashboard utilisateur (protégé)
+/dashboard-owner → Dashboard propriétaire (protégé)
+/parking/:id → Détails d'un parking
+```
+
+### 🧱 ARCHITECTURE RESPECTÉE
+
+#### ✅ Clean Architecture
+- **Séparation des responsabilités** :
+  - `pages/` → Pages principales
+  - `components/` → Composants réutilisables
+  - `services/` → Logique métier API
+  - `routes/` → Configuration des routes
+
+#### ✅ Code Propre
+- Composants **petits, clairs et réutilisables**
+- Hooks React utilisés proprement (`useState`, `useEffect`, `useNavigate`)
+- Noms de fichiers et variables en **camelCase**
+- Chaque fonction fait **une seule chose claire**
+- Code **indenté, commenté et lisible**
+
+#### ✅ Service API Simulé
+- Toutes les fonctions API sont **simulées** pour l'instant
+- Prêt à être **connecté au backend PHP**
+- Données mock incluant :
+  - Utilisateurs test (user@example.com / owner@example.com)
+  - Parkings exemple
+  - Réservations exemple
+
+### 🚀 TECHNOLOGIES UTILISÉES
+
+```json
+{
+  "react": "^19.2.0",
+  "react-dom": "^19.2.0",
+  "react-router-dom": "^6.30.1",
+  "react-scripts": "5.0.1",
+  "tailwindcss": "^3.4.18",
+  "postcss": "^8.5.6",
+  "autoprefixer": "^10.4.21"
+}
+```
+
+### 🔐 GESTION DE L'AUTHENTIFICATION
+
+- ✅ Stockage du token JWT dans `localStorage`
+- ✅ Protection des routes avec `ProtectedRoute`
+- ✅ Redirection automatique si non connecté
+- ✅ Gestion des rôles (user/owner)
+- ✅ Navigation adaptée selon le rôle
+
+### 🎨 CONFIGURATION TAILWINDCSS
+
+```javascript
+// tailwind.config.js
+module.exports = {
+  content: ["./src/**/*.{js,jsx,ts,tsx}"],
+  theme: {
+    extend: {
+      colors: {
+        primary: '#34A853',
+      },
+      fontFamily: {
+        sans: ['Poppins', 'Inter', 'system-ui', 'sans-serif'],
+      },
+    },
+  },
+  plugins: [],
+}
+```
+
+---
+
+## 📋 RÉSUMÉ DES FONCTIONNALITÉS
+
+### ✅ Fonctionnalités Utilisateur
+- [x] Inscription avec choix de rôle
+- [x] Connexion avec gestion des rôles
+- [x] Visualisation des réservations
+- [x] Visualisation des stationnements actifs
+- [x] Réservation d'un parking
+- [x] Visualisation des abonnements
+
+### ✅ Fonctionnalités Propriétaire
+- [x] Ajout de parkings
+- [x] Modification des tarifs
+- [x] Modification des horaires
+- [x] Visualisation du CA mensuel
+- [x] Visualisation des réservations en cours
+- [x] Visualisation des stationnements actifs
+
+---
+
+## 🎯 RESPECT DES CONSIGNES
+
+### ✅ Structure du Frontend
+- [x] Architecture claire (src/, pages/, components/, routes/, services/)
+- [x] React sans Next.js ni Vite
+- [x] TailwindCSS pour le design
+- [x] React Router DOM pour la navigation
+- [x] Aucune dépendance inutile
+
+### ✅ Design
+- [x] Style moderne et épuré
+- [x] Design responsive
+- [x] Utilisation de TailwindCSS
+- [x] Couleur principale : #34A853 (vert)
+- [x] Navbar + Footer
+
+### ✅ Pages Demandées
+- [x] Accueil (Home)
+- [x] Inscription avec choix de rôle
+- [x] Connexion
+- [x] Dashboard utilisateur
+- [x] Dashboard propriétaire
+- [x] Page détails parking
+
+### ✅ Architecture & Code
+- [x] Clean Architecture respectée
+- [x] Composants réutilisables
+- [x] Code clair et lisible
+- [x] Indentation correcte
+- [x] Commentaires pertinents
+- [x] Hooks React bien utilisés
+
+### ✅ Fonctionnalités Spécifiques
+- [x] Dashboard user : réservations, stationnements, boutons
+- [x] Dashboard owner : CA mensuel, réservations en cours, stationnements actifs
+- [x] Gestion des rôles (user/owner)
+- [x] Protection des routes
+- [x] Service API simulé prêt pour backend
+
+---
+
+## 📝 COMMANDES DISPONIBLES
+
+```bash
+# Démarrer l'application
+cd frontend
+npm start
+
+# Build de production
+npm run build
+
+# Lancer les tests
+npm test
+```
+
+---
+
+## 🔗 CONNEXION BACKEND (À VENIR)
+
+Le frontend est **prêt à être connecté** au backend PHP :
+- Toutes les fonctions API sont dans `src/services/apiService.js`
+- Il suffira de remplacer les appels simulés par de vrais appels fetch vers le backend
+- L'URL de base est configurée : `http://localhost:8001/api`
+
+---
+
+## 📊 POINTS CLÉS RÉALISÉS
+
+1. ✅ **Structure complète** : Toutes les pages et composants demandés
+2. ✅ **Design responsive** : Interface moderne avec TailwindCSS
+3. ✅ **Gestion des rôles** : Inscription/Connexion avec distinction user/owner
+4. ✅ **Architecture propre** : Clean Architecture respectée
+5. ✅ **Code fonctionnel** : Toutes les fonctionnalités simulées
+6. ✅ **Prêt pour production** : Build et déploiement possibles
+7. ✅ **Documentation** : README complet avec toutes les infos
+
+---
+
+## 🎓 VALIDATION PROJET HETIC
+
+Le projet respecte **toutes les consignes HETIC** :
+- ✅ Frontend React complet et fonctionnel
+- ✅ Architecture claire et bien organisée
+- ✅ Code propre et respectant les bonnes pratiques
+- ✅ Interface responsive et moderne
+- ✅ Gestion complète des utilisateurs et propriétaires
+- ✅ Prêt à être rendu en .zip avec README clair
+
+---
+
+## 📌 COMMIT GIT
+
+**Dernier commit** : "premier push test page login inscription"
+
+Le code est disponible sur GitHub : https://github.com/gladiaaa/Parking_project.git
+
+---
+
+## 🚀 PROCHAINES ÉTAPES (Optionnel)
+
+1. Connecter le frontend au backend PHP
+2. Implémenter les vrais appels API
+3. Ajouter la gestion des paiements
+4. Implémenter les notifications
+5. Ajouter un système de messagerie
+
+---
+
+**Projet réalisé avec succès selon les spécifications HETIC ! 🎉**
+
+
+
+
+================================================
+FILE: Backend/composer.json
+================================================
+{
+  "require": {
+    "php": "^8.2",
+    "firebase/php-jwt": "^6.10",
+    "vlucas/phpdotenv": "^5.6"
+  },
+  "autoload": {
+    "psr-4": {
+      "App\\": "src/"
+    }
+  },
+  "require-dev": {
+    "phpunit/phpunit": "11"
+  }
+}
+
+
+
+================================================
+FILE: Backend/phpunit.xml.dist
+================================================
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit bootstrap="vendor/autoload.php" colors="true">
+  <testsuites>
+    <testsuite name="Unit">
+      <directory>tests</directory>
+    </testsuite>
+  </testsuites>
+</phpunit>
+
+
+
+================================================
+FILE: Backend/public/index.php
+================================================
+<?php
+declare(strict_types=1);
+
+require __DIR__ . '/../src/bootstrap.php';
+
+cors();
+
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    http_response_code(204);
+    exit;
+}
+
+$method = $_SERVER['REQUEST_METHOD'];
+$path   = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH) ?? '/';
+
+$router->dispatch($method, $path);
+
+
+
+================================================
+FILE: Backend/src/bootstrap.php
+================================================
+<?php
+declare(strict_types=1);
+
+require __DIR__ . '/../vendor/autoload.php';
+
+use Dotenv\Dotenv;
+
+// =======================================
+// Load ENV
+// =======================================
+$dotenv = Dotenv::createImmutable(__DIR__ . '/..');
+$dotenv->load();
+
+// =======================================
+// Imports
+// =======================================
+use App\Infrastructure\Persistence\SqlUserRepository;
+use App\Infrastructure\Security\JwtManager;
+use App\Infrastructure\Security\PasswordHasher;
+use App\Infrastructure\Http\Router;
+
+use App\Controller\AuthController;
+use App\Controller\Auth2FAController;
+use App\Controller\MeController;
+
+use App\UseCase\Auth\LoginUser;
+use App\UseCase\Auth\RegisterUser;
+use App\UseCase\Auth\RefreshToken;
+use App\UseCase\Auth\StartTwoFactor;
+use App\UseCase\Auth\VerifyTwoFactor;
+use App\UseCase\Auth\Mailer;
+use App\UseCase\Auth\SmsSender;
+use App\UseCase\Auth\TotpVerifier;
+
+// =======================================
+// Config
+// =======================================
+
+function cors(): void {
+    header('Access-Control-Allow-Origin: ' . $_ENV['APP_ORIGIN']);
+    header('Access-Control-Allow-Credentials: true');
+    header('Access-Control-Allow-Headers: Content-Type, X-Requested-With');
+    header('Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS');
+    header('Content-Type: application/json; charset=utf-8');
+}
+
+function json($data, int $status = 200): void {
+    http_response_code($status);
+    echo json_encode($data, JSON_UNESCAPED_UNICODE);
+}
+
+function pdo(): PDO {
+    static $pdo = null;
+    if ($pdo) return $pdo;
+
+    $dsn = 'mysql:host=' . $_ENV['DB_HOST'] .
+           ';dbname=' . $_ENV['DB_NAME'] .
+           ';charset=' . $_ENV['DB_CHARSET'];
+
+    $pdo = new PDO($dsn, $_ENV['DB_USER'], $_ENV['DB_PASS'], [
+        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+    ]);
+
+    return $pdo;
+}
+
+// =======================================
+// Dependency Container
+// =======================================
+
+$pdo = pdo();
+
+$userRepository = new SqlUserRepository($pdo);
+$passwordHasher = new PasswordHasher();
+
+$jwtManager = new JwtManager(
+    $_ENV['JWT_SECRET'],
+    (int)$_ENV['JWT_ACCESS_TTL'],
+    (int)$_ENV['JWT_REFRESH_TTL']
+);
+
+// Fake mailer
+$mailer = new class implements Mailer {
+    public function sendTwoFactorCodeEmail(string $to, string $code): void {
+        error_log("[2FA EMAIL] $to -> code $code");
+    }
+};
+
+// Fake SMS
+$smsSender = new class implements SmsSender {
+    public function sendTwoFactorSms(string $phone, string $code): void {
+        error_log("[2FA SMS] $phone -> code $code");
+    }
+};
+
+// Fake TOTP
+$totpVerifier = new class implements TotpVerifier {
+    public function verify(string $secret, string $code): bool {
+        return true;
+    }
+};
+
+// =======================================
+// Use cases
+// =======================================
+
+$loginUser = new LoginUser($userRepository, $passwordHasher);
+$registerUser = new RegisterUser($userRepository, $passwordHasher);
+$refreshToken = new RefreshToken($jwtManager, $userRepository);
+$startTwoFA = new StartTwoFactor($userRepository, $mailer, $smsSender);
+$verify2FA = new VerifyTwoFactor($userRepository, $jwtManager, $totpVerifier);
+
+// =======================================
+// Controllers
+// =======================================
+
+$meController = new MeController($jwtManager, $userRepository);
+$authController = new AuthController(
+    $loginUser,
+    $refreshToken,
+    $registerUser,
+    $startTwoFA,
+    $jwtManager
+);
+$auth2FAController = new Auth2FAController($verify2FA, $jwtManager);
+
+// =======================================
+// Router
+// =======================================
+
+$router = new Router();
+
+$router
+    ->get('/health', fn() => json(['ok' => true, 'php' => PHP_VERSION]))
+    ->get('/api/me', [$meController, 'me'])
+
+    ->post('/api/auth/login', [$authController, 'login'])
+    ->post('/api/auth/register', [$authController, 'register'])
+    ->post('/api/auth/refresh', [$authController, 'refresh'])
+    ->post('/api/auth/logout', [$authController, 'logout'])
+
+    ->post('/api/auth/2fa/verify', [$auth2FAController, 'verify']);
+
+
+
+================================================
+FILE: Backend/src/parking.php
+================================================
+<?php
+
+class Parking
+{
+    private string $gps;
+    private float $tarif;
+    private DateTime $HeureDebut;
+    private DateTime $HeureFin;
+    private array $list_reservation;
+    private array $list_stationnement;
+
+    public function __construct(
+        string $gps,
+        float $tarif,
+        DateTime $HeureDebut,
+        DateTime $HeureFin,
+        array $list_stationnement,
+        array $list_reservation = []
+    ) {
+        $this->gps = $gps;
+        $this->tarif = $tarif;
+        $this->HeureDebut = $HeureDebut;
+        $this->HeureFin = $HeureFin;
+        $this->list_reservation = $list_reservation;
+        $this->list_stationnement = $list_stationnement;
+    }
+
+    public function getHeureFin(): DateTime
+    {
+        return $this->HeureFin;
+    }
+
+    public function setHeureFin(DateTime $HeureFin): void
+    {
+        $this->HeureFin = $HeureFin;
+    }
+
+    public function getHeureDebut(): DateTime
+    {
+        return $this->HeureDebut;
+    }
+
+    public function setHeureDebut(DateTime $HeureDebut): void
+    {
+        $this->HeureDebut = $HeureDebut;
+    }
+
+    public function getTarif(): float
+    {
+        return $this->tarif;
+    }
+
+    public function setTarif(float $tarif): void
+    {
+        $this->tarif = $tarif;
+    }
+
+    public function getGps(): string
+    {
+        return $this->gps;
+    }
+
+    public function setGps(string $gps): void
+    {
+        $this->gps = $gps;
+    }
+
+    public function getListReservation(): array
+    {
+        return $this->list_reservation;
+    }
+
+    public function setListReservation(array $list_reservation): void
+    {
+        $this->list_reservation = $list_reservation;
+    }
+
+    public function getListStationnement(): array
+    {
+        return $this->list_stationnement;
+    }
+
+    public function setListStationnement(array $list_stationnement): void
+    {
+        $this->list_stationnement = $list_stationnement;
+    }
+}
+
+
+================================================
+FILE: Backend/src/Controller/Auth2FAController.php
+================================================
+<?php
+declare(strict_types=1);
+
+namespace App\Controller;
+
+use App\Infrastructure\Http\Response;
+use App\Infrastructure\Security\JwtManager;
+use App\UseCase\Auth\VerifyTwoFactor;
+
+final class Auth2FAController
+{
+    public function __construct(
+        private VerifyTwoFactor $verifyTwoFactor,
+        private JwtManager $jwt,
+    ) {}
+
+    public function verify(): void
+    {
+        $data = json_decode(file_get_contents('php://input'), true) ?? [];
+        $code = (string)($data['code'] ?? '');
+
+        // On lit le token "pending 2FA" (P2_AUTH)
+        $p2 = $this->jwt->readPending2FA();
+        if (!$p2 || ($p2['typ'] ?? '') !== 'p2') {
+            Response::json(['error' => 'Missing 2FA session'], 401);
+            return;
+        }
+
+        $userId = (int)($p2['sub'] ?? 0);
+        if ($userId <= 0) {
+            Response::json(['error' => 'Invalid 2FA context'], 401);
+            return;
+        }
+
+        try {
+            // Use case = logique métier
+            $tokens = $this->verifyTwoFactor->execute($userId, $code);
+        } catch (\Throwable) {
+            Response::json(['error' => 'Invalid 2FA'], 401);
+            return;
+        }
+
+        // Pose les cookies ACCESS / REFRESH
+        $this->jwt->setAccessCookie($tokens['access_token']);
+        $this->jwt->setRefreshCookie($tokens['refresh_token']);
+
+        // On détruit le cookie P2_AUTH
+        $this->jwt->setPending2FACookie(''); // ou setcookie('P2_AUTH', '', time()-3600, '/');
+
+        Response::json(['ok' => true]);
+    }
+
+    public function resend(): void
+    {
+        // à implémenter si tu veux renvoyer un code, pour l’instant juste OK
+        Response::json(['ok' => true]);
+    }
+}
+
+
+
+================================================
+FILE: Backend/src/Controller/AuthController.php
+================================================
+<?php
+declare(strict_types=1);
+
+namespace App\Controller;
+
+use App\Infrastructure\Http\Response;
+use App\Infrastructure\Security\JwtManager;
+use App\UseCase\Auth\LoginUser;
+use App\UseCase\Auth\RefreshToken;
+use App\UseCase\Auth\RegisterUser;
+use App\UseCase\Auth\StartTwoFactor;
+
+final class AuthController
+{
+    public function __construct(
+        private LoginUser $loginUser,
+        private RefreshToken $refreshToken,
+        private RegisterUser $registerUser,
+        private StartTwoFactor $startTwoFactor,
+        private JwtManager $jwt,
+    ) {
+    }
+
+    /** POST /api/auth/login */
+    public function login(): void
+    {
+        $data = json_decode(file_get_contents('php://input'), true) ?? [];
+        $email = (string) ($data['email'] ?? '');
+        $password = (string) ($data['password'] ?? '');
+
+        try {
+            $result = $this->loginUser->execute($email, $password);
+
+            if (!$result['success']) {
+                Response::json(['error' => 'Invalid credentials'], 401);
+                return;
+            }
+
+            // Si 2FA requise : pas de JWT définitifs, juste un pending token
+            if (!empty($result['two_factor_required']) && $result['two_factor_required'] === true) {
+                $userId = $result['user_id'];
+
+                $p2 = $this->jwt->issuePending2FAToken($userId);
+                $this->jwt->setPending2FACookie($p2);
+
+                $this->startTwoFactor->execute($userId);
+
+                Response::json(['status' => '2fa_required']);
+                return;
+            }
+
+            // Pas de 2FA → on génère les vrais tokens
+            $userId = $result['user_id'];
+            $role = $result['role'];
+
+            [$access, $refresh] = $this->jwt->issueFor($userId, $role);
+            $this->jwt->setAccessCookie($access);
+            $this->jwt->setRefreshCookie($refresh);
+
+            Response::json(['ok' => true]);
+        } catch (\Throwable) {
+            Response::json(['error' => 'Invalid credentials'], 401);
+        }
+    }
+
+    /** POST /api/auth/register */
+    public function register(): void
+{
+    $data = json_decode(file_get_contents('php://input'), true) ?? [];
+
+    $email = $data['email'] ?? '';
+    $password = $data['password'] ?? '';
+    $role = $data['role'] ?? 'USER';
+    $firstname = $data['firstname'] ?? null;
+    $lastname = $data['lastname'] ?? null;
+
+    try {
+        $user = $this->registerUser->execute(
+            $email,
+            $password,
+            strtoupper($role),
+            $firstname,
+            $lastname
+        );
+
+        // Login automatique
+        [$access, $refresh] = $this->jwt->issueFor($user['id'], $user['role']);
+        $this->jwt->setAccessCookie($access);
+        $this->jwt->setRefreshCookie($refresh);
+
+        Response::json([
+            'success' => true,
+            'user' => $user,
+        ], 201);
+
+    } catch (\RuntimeException $e) {
+        Response::json(['error' => $e->getMessage()], 409);
+    } catch (\Throwable $e) {
+        Response::json(['error' => 'Error registering user'], 400);
+    }
+}
+
+    /** POST /api/auth/refresh */
+    public function refresh(): void
+    {
+        $result = $this->refreshToken->execute();
+
+        if (!$result) {
+            Response::json(['error' => 'Invalid refresh'], 401);
+            return;
+        }
+
+        $this->jwt->setAccessCookie($result['access']);
+        Response::json(['ok' => true]);
+    }
+
+    /** POST /api/auth/logout */
+    public function logout(): void
+    {
+        $this->jwt->clearAuthCookies();
+        Response::json(['ok' => true]);
+    }
+}
+
+
+
+================================================
+FILE: Backend/src/Controller/MeController.php
+================================================
+<?php
+declare(strict_types=1);
+
+namespace App\Controller;
+
+use App\Infrastructure\Http\Response;
+use App\Infrastructure\Security\JwtManager;
+use App\Domain\Repository\UserRepository;
+
+final class MeController
+{
+    public function __construct(
+        private JwtManager $jwt,
+        private UserRepository $users,
+    ) {}
+
+    /** GET /api/me */
+    public function me(): void
+    {
+        // On lit le JWT d'accès depuis le cookie ACCESS_TOKEN
+        $payload = $this->jwt->readAccessFromCookie();
+
+        if (!$payload || ($payload['typ'] ?? '') !== 'access') {
+            Response::json(['error' => 'Unauthorized'], 401);
+            return;
+        }
+
+        $userId = (int)($payload['sub'] ?? 0);
+        if ($userId <= 0) {
+            Response::json(['error' => 'Unauthorized'], 401);
+            return;
+        }
+
+        $user = $this->users->findById($userId);
+        if (!$user) {
+            Response::json(['error' => 'Unauthorized'], 401);
+            return;
+        }
+
+        Response::json([
+            'id'    => $user->id(),
+            'email' => $user->email(),
+            'role'  => $user->role(),
+            'firstname' => $user->firstname(),
+            'lastname' => $user->lastname(),
+        ]);
+    }
+}
+
+
+
+================================================
+FILE: Backend/src/Domain/Entity/User.php
+================================================
+<?php
+declare(strict_types=1);
+
+namespace App\Domain\Entity;
+
+final class User
+{
+    public function __construct(
+        private int $id,
+        private string $email,
+        private string $passwordHash,
+        private string $role = 'USER',
+
+        private ?string $firstname = null,
+        private ?string $lastname = null,
+
+        // Config 2FA
+        private bool $twoFactorEnabled = true,
+        // 'email' | 'sms' | 'totp'
+        private string $twoFactorMethod = 'email',
+
+        // 2FA par code (email / sms)
+        private ?string $twoFactorLastCode = null,
+        private ?\DateTimeImmutable $twoFactorExpiresAt = null,
+
+        // 2FA SMS
+        private ?string $twoFactorPhone = null,
+
+        // 2FA TOTP (Google Authenticator, etc.)
+        private ?string $twoFactorTotpSecret = null,
+    ) {
+    }
+
+    // ====================
+    // Getters de base
+    // ====================
+
+    public function id(): int
+    {
+        return $this->id;
+    }
+
+    public function email(): string
+    {
+        return $this->email;
+    }
+
+    public function passwordHash(): string
+    {
+        return $this->passwordHash;
+    }
+
+    public function role(): string
+    {
+        return $this->role;
+    }
+
+    public function firstname(): ?string
+    {
+        return $this->firstname;
+    }
+    public function lastname(): ?string
+    {
+        return $this->lastname;
+    }
+    // ====================
+    // 2FA - configuration
+    // ====================
+
+    public function twoFactorEnabled(): bool
+    {
+        return $this->twoFactorEnabled;
+    }
+
+    public function twoFactorMethod(): string
+    {
+        return $this->twoFactorMethod;
+    }
+
+    public function twoFactorPhone(): ?string
+    {
+        return $this->twoFactorPhone;
+    }
+
+    public function twoFactorTotpSecret(): ?string
+    {
+        return $this->twoFactorTotpSecret;
+    }
+
+    // immuable : config complète de la 2FA (méthode + éventuel numéro)
+    public function withTwoFactorConfig(
+        bool $enabled,
+        string $method,
+        ?string $phone = null
+    ): self {
+        $allowed = ['email', 'sms', 'totp'];
+        if (!\in_array($method, $allowed, true)) {
+            throw new \InvalidArgumentException('Invalid 2FA method');
+        }
+
+        $c = clone $this;
+        $c->twoFactorEnabled = $enabled;
+        $c->twoFactorMethod = $method;
+        $c->twoFactorPhone = $phone;
+
+        return $c;
+    }
+
+    // Pour TOTP uniquement
+    public function withTotpSecret(string $secret): self
+    {
+        $c = clone $this;
+        $c->twoFactorTotpSecret = $secret;
+        return $c;
+    }
+
+    public function hasTotpConfigured(): bool
+    {
+        return $this->twoFactorTotpSecret !== null && $this->twoFactorTotpSecret !== '';
+    }
+
+    // ====================
+    // 2FA - challenge code (email / sms)
+    // ====================
+
+    public function twoFactorLastCode(): ?string
+    {
+        return $this->twoFactorLastCode;
+    }
+
+    public function twoFactorExpiresAt(): ?\DateTimeImmutable
+    {
+        return $this->twoFactorExpiresAt;
+    }
+
+    public function with2FACode(string $code, \DateTimeImmutable $expires): self
+    {
+        $c = clone $this;
+        $c->twoFactorLastCode = $code;
+        $c->twoFactorExpiresAt = $expires;
+        return $c;
+    }
+
+    public function clear2FA(): self
+    {
+        $c = clone $this;
+        $c->twoFactorLastCode = null;
+        $c->twoFactorExpiresAt = null;
+        return $c;
+    }
+
+    public function hasValid2FACode(string $code, \DateTimeImmutable $now): bool
+    {
+        if ($this->twoFactorLastCode === null || $this->twoFactorExpiresAt === null) {
+            return false;
+        }
+
+        if ($this->twoFactorExpiresAt < $now) {
+            return false;
+        }
+
+        return hash_equals($this->twoFactorLastCode, $code);
+    }
+}
+
+
+
+================================================
+FILE: Backend/src/Domain/Repository/UserRepository.php
+================================================
+<?php
+declare(strict_types=1);
+
+namespace App\Domain\Repository;
+
+use App\Domain\Entity\User;
+
+interface UserRepository
+{
+    public function findById(int $id): ?User;
+    public function findByEmail(string $email): ?User;
+
+    // 👇 on remplace save2FA par ça
+    public function save(User $user): void;
+  public function create(
+    string $email,
+    string $passwordHash,
+    string $role = 'USER',
+    ?string $firstname = null,
+    ?string $lastname = null
+): User;
+}
+
+
+
+================================================
+FILE: Backend/src/Infrastructure/Http/IsGranted.php
+================================================
+<?php
+declare(strict_types=1);
+
+namespace App\Infrastructure\Http;
+
+use App\Infrastructure\Security\JwtManager;
+
+#[\Attribute(\Attribute::TARGET_METHOD)]
+final class IsGranted
+{
+    public function __construct(private string $role = 'USER')
+    {
+    }
+
+    public function assert(): void
+    {
+        $jwt = new JwtManager(\JWT_SECRET, \ACCESS_TTL, \REFRESH_TTL);
+        $payload = $jwt->readAccessFromCookie();
+        if (!$payload) {
+            Response::json(['error' => 'Unauthorized'], 401);
+            exit;
+        }
+        $userRole = $payload['role'] ?? 'USER';
+        $ranks = ['USER' => 1, 'OWNER' => 2, 'ADMIN' => 3,];
+        if (($ranks[$userRole] ?? 0) < ($ranks[$this->role] ?? 99)) {
+            Response::json(['error' => 'Forbidden'], 403);
+            exit;
+        }
+    }
+}
+
+
+
+================================================
+FILE: Backend/src/Infrastructure/Http/Response.php
+================================================
+<?php
+declare(strict_types=1);
+
+namespace App\Infrastructure\Http;
+
+final class Response
+{
+    public static function json(array $data, int $status = 200): void
+    {
+        http_response_code($status);
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode($data, JSON_UNESCAPED_UNICODE);
+    }
+}
+
+
+
+================================================
+FILE: Backend/src/Infrastructure/Http/Router.php
+================================================
+<?php
+declare(strict_types=1);
+
+namespace App\Infrastructure\Http;
+
+use ReflectionMethod;
+use App\Infrastructure\Http\IsGranted; 
+
+final class Router
+{
+    private array $routes = [];
+
+    public function get(string $path, callable $handler): self
+    {
+        return $this->map('GET', $path, $handler);
+    }
+    public function post(string $path, callable $handler): self
+    {
+        return $this->map('POST', $path, $handler);
+    }
+    public function map(string $method, string $path, callable $handler): self
+    {
+        $this->routes[$method][$path] = $handler;
+        return $this;
+    }
+
+    public function dispatch(string $method, string $path): void
+    {
+        $handler = $this->routes[$method][$path] ?? null;
+        if (!$handler) {
+            Response::json(['error' => 'Not Found'], 404);
+            return;
+        }
+
+        if (is_array($handler) && is_object($handler[0])) {
+            $ref = new ReflectionMethod($handler[0], $handler[1]);
+            foreach ($ref->getAttributes(IsGranted::class) as $a) {
+                /** @var IsGranted $guard */
+                $guard = $a->newInstance();
+                $guard->assert();
+            }
+            
+        }
+        
+        call_user_func($handler);
+    }
+}
+
+
+
+================================================
+FILE: Backend/src/Infrastructure/Persistence/SqlUserRepository.php
+================================================
+<?php
+declare(strict_types=1);
+
+namespace App\Infrastructure\Persistence;
+
+use App\Domain\Entity\User;
+use App\Domain\Repository\UserRepository;
+use PDO;
+
+final class SqlUserRepository implements UserRepository
+{
+    public function __construct(private PDO $pdo) {}
+
+    private function hydrate(array $r): User
+    {
+        return new User(
+            (int)$r['id'],
+            (string)$r['email'],
+            (string)$r['password_hash'],
+            (string)$r['role'],
+
+            $r['firstname'] ?? null,
+            $r['lastname'] ?? null,
+
+            (bool)$r['two_factor_enabled'],
+            (string)$r['two_factor_method'],
+            $r['two_factor_last_code'] ?? null,
+            $r['two_factor_expires_at']
+                ? new \DateTimeImmutable($r['two_factor_expires_at'])
+                : null,
+            $r['two_factor_phone'] ?? null,
+            $r['two_factor_totp_secret'] ?? null,
+        );
+    }
+
+    public function findById(int $id): ?User {
+        $st = $this->pdo->prepare('SELECT * FROM users WHERE id = ?');
+        $st->execute([$id]);
+        $r = $st->fetch(PDO::FETCH_ASSOC);
+        return $r ? $this->hydrate($r) : null;
+    }
+
+    public function findByEmail(string $email): ?User {
+        $st = $this->pdo->prepare('SELECT * FROM users WHERE email = ?');
+        $st->execute([$email]);
+        $r = $st->fetch(PDO::FETCH_ASSOC);
+        return $r ? $this->hydrate($r) : null;
+    }
+
+    public function create(
+        string $email,
+        string $passwordHash,
+        string $role = 'USER',
+        ?string $firstname = null,
+        ?string $lastname = null
+    ): User {
+        $st = $this->pdo->prepare(
+            "INSERT INTO users (email, password_hash, role, firstname, lastname, two_factor_enabled, two_factor_method)
+             VALUES (?, ?, ?, ?, ?, 0, 'email')"
+        );
+
+        $st->execute([$email, $passwordHash, $role, $firstname, $lastname]);
+        $id = (int)$this->pdo->lastInsertId();
+
+        return new User(
+            $id, $email, $passwordHash, $role,
+            $firstname, $lastname,
+            false, 'email', null, null, null, null
+        );
+    }
+
+    public function save(User $u): void
+    {
+        $st = $this->pdo->prepare(
+            "UPDATE users SET
+                email = ?,
+                password_hash = ?,
+                role = ?,
+                firstname = ?,
+                lastname = ?,
+                two_factor_enabled = ?,
+                two_factor_method = ?,
+                two_factor_last_code = ?,
+                two_factor_expires_at = ?,
+                two_factor_phone = ?,
+                two_factor_totp_secret = ?
+             WHERE id = ?"
+        );
+
+        $exp = $u->twoFactorExpiresAt()?->format('Y-m-d H:i:s');
+
+        $st->execute([
+            $u->email(),
+            $u->passwordHash(),
+            $u->role(),
+            $u->firstname(),
+            $u->lastname(),
+            $u->twoFactorEnabled() ? 1 : 0,
+            $u->twoFactorMethod(),
+            $u->twoFactorLastCode(),
+            $exp,
+            $u->twoFactorPhone(),
+            $u->twoFactorTotpSecret(),
+            $u->id(),
+        ]);
+    }
+}
+
+
+
+================================================
+FILE: Backend/src/Infrastructure/Security/JwtManager.php
+================================================
+<?php
+declare(strict_types=1);
+
+namespace App\Infrastructure\Security;
+
+use Firebase\JWT\JWT;
+use Firebase\JWT\Key;
+
+final class JwtManager
+{
+    public function __construct(
+        private string $secret,
+        private int $accessTtl,
+        private int $refreshTtl
+    ) {
+    }
+
+    public function issueFor(int $userId, string $role): array
+    {
+        $now = time();
+        $access = [
+            'iat' => $now,
+            'nbf' => $now,
+            'exp' => $now + $this->accessTtl,
+            'sub' => $userId,
+            'role' => $role,
+            'typ' => 'access'
+        ];
+        $refresh = [
+            'iat' => $now,
+            'nbf' => $now,
+            'exp' => $now + $this->refreshTtl,
+            'sub' => $userId,
+            'typ' => 'refresh'
+        ];
+        return [$this->encode($access), $this->encode($refresh)];
+    }
+
+    public function encode(array $payload): string
+    {
+        return JWT::encode($payload, $this->secret, 'HS256');
+    }
+
+    public function decode(string $jwt): ?array
+    {
+        try {
+            return (array) JWT::decode($jwt, new Key($this->secret, 'HS256'));
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    // --- Cookies (HttpOnly)
+    public function setAccessCookie(string $token): void
+    {
+        $this->cookie('ACCESS_TOKEN', $token, $this->accessTtl);
+    }
+    public function setRefreshCookie(string $token): void
+    {
+        $this->cookie('REFRESH_TOKEN', $token, $this->refreshTtl);
+    }
+    public function clearAuthCookies(): void
+    {
+        $this->cookie('ACCESS_TOKEN', '', -3600);
+        $this->cookie('REFRESH_TOKEN', '', -3600);
+        $this->cookie('P2_AUTH', '', -3600);
+    }
+    private function cookie(string $name, string $value, int $ttl): void
+    {
+        $secure = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on';
+        setcookie($name, $value, [
+            'expires' => time() + $ttl,
+            'path' => '/',
+            'secure' => $secure,
+            'httponly' => true,
+            'samesite' => $secure ? 'None' : 'Lax'
+        ]);
+    }
+
+    // --- Helpers “lecture”
+    public function readAccessFromCookie(): ?array
+    {
+        $raw = $_COOKIE['ACCESS_TOKEN'] ?? '';
+        return $raw ? $this->decode($raw) : null;
+    }
+    public function readRefreshFromCookie(): ?array
+    {
+        $raw = $_COOKIE['REFRESH_TOKEN'] ?? '';
+        return $raw ? $this->decode($raw) : null;
+    }
+
+    // --- 2FA (pending token court)
+    public function issuePending2FAToken(int $userId): string
+    {
+        $now = time();
+        $p2 = ['iat' => $now, 'nbf' => $now, 'exp' => $now + 300, 'sub' => $userId, 'typ' => 'p2'];
+        return $this->encode($p2);
+    }
+    public function setPending2FACookie(string $token): void
+    {
+        $this->cookie('P2_AUTH', $token, 300);
+    }
+    public function readPending2FA(): ?array
+    {
+        $raw = $_COOKIE['P2_AUTH'] ?? '';
+        return $raw ? $this->decode($raw) : null;
+    }
+}
+
+
+
+================================================
+FILE: Backend/src/Infrastructure/Security/PasswordHasher.php
+================================================
+<?php
+declare(strict_types=1);
+
+namespace App\Infrastructure\Security;
+
+final class PasswordHasher {
+  public function hash(string $plain): string {
+    return password_hash($plain, PASSWORD_ARGON2ID);
+  }
+  public function verify(string $plain, string $hash): bool {
+    return password_verify($plain, $hash);
+  }
+}
+
+
+
+================================================
+FILE: Backend/src/UseCase/Auth/ConfigureTwoFactorMethod.php
+================================================
+class ConfigureTwoFactorMethod
+{
+    public function __construct(
+        private UserRepository $userRepository
+    ) {}
+
+    public function execute(int $userId, string $method): array
+    {
+        $allowed = ['email', 'sms', 'totp'];
+        if (!in_array($method, $allowed, true)) {
+            throw new \InvalidArgumentException('Invalid 2FA method');
+        }
+
+        $user = $this->userRepository->findById($userId);
+
+        if (!$user) {
+            throw new \RuntimeException('User not found');
+        }
+
+        $user->enableTwoFactor($method);
+
+        $qrData = null;
+
+        if ($method === 'totp') {
+            // Génération d’un secret TOTP (genre base32)
+            $secret = $this->generateTotpSecret();
+            $user->setTotpSecret($secret);
+
+            // URI TOTP standard (pour les apps)
+            $qrData = $this->buildTotpProvisioningUri($user->getEmail(), $secret);
+        }
+
+        $this->userRepository->save($user);
+
+        return [
+            'method' => $method,
+            'totp_uri' => $qrData, // null si pas TOTP
+        ];
+    }
+}
+
+
+
+================================================
+FILE: Backend/src/UseCase/Auth/GetCurrentUser.php
+================================================
+<?php
+declare(strict_types=1);
+
+namespace App\UseCase\Auth;
+
+use App\Infrastructure\Security\JwtManager;
+use App\Domain\Repository\UserRepository;
+
+final class GetCurrentUser {
+  public function __construct(private JwtManager $jwt, private UserRepository $users) {}
+
+  public function __invoke(): ?array {
+    $p = $this->jwt->readAccessFromCookie();
+    if (!$p || ($p['typ'] ?? '') !== 'access') return null;
+    $u = $this->users->findById((int)$p['sub']);
+    if (!$u) return null;
+    return ['id'=>$u->id(), 'email'=>$u->email(), 'role'=>$u->role()];
+  }
+}
+
+
+
+================================================
+FILE: Backend/src/UseCase/Auth/LoginUser.php
+================================================
+<?php
+declare(strict_types=1);
+
+namespace App\UseCase\Auth;
+
+use App\Domain\Repository\UserRepository;
+use App\Infrastructure\Security\PasswordHasher;
+
+final class LoginUser
+{
+    public function __construct(
+        private UserRepository $users,
+        private PasswordHasher $hasher,
+    ) {}
+
+    public function execute(string $email, string $password): array
+    {
+        $u = $this->users->findByEmail($email);
+
+        if (!$u || !$this->hasher->verify($password, $u->passwordHash())) {
+            return ['success' => false];
+        }
+
+        if ($u->twoFactorEnabled()) {
+            return [
+                'success'             => true,
+                'two_factor_required' => true,
+                'user_id'             => $u->id(),
+                'role'                => $u->role(),
+            ];
+        }
+
+        return [
+            'success'             => true,
+            'two_factor_required' => false,
+            'user_id'             => $u->id(),
+            'role'                => $u->role(),
+        ];
+    }
+}
+
+
+
+================================================
+FILE: Backend/src/UseCase/Auth/Mailer.php
+================================================
+<?php
+declare(strict_types=1);
+
+namespace App\UseCase\Auth;
+
+interface Mailer
+{
+    public function sendTwoFactorCodeEmail(string $to, string $code): void;
+}
+
+
+
+================================================
+FILE: Backend/src/UseCase/Auth/RefreshToken.php
+================================================
+<?php
+declare(strict_types=1);
+
+namespace App\UseCase\Auth;
+
+use App\Infrastructure\Security\JwtManager;
+use App\Domain\Repository\UserRepository;
+
+final class RefreshToken
+{
+  public function execute(): ?array
+  {
+    return $this->__invoke();
+  }
+
+  public function __construct(private JwtManager $jwt, private UserRepository $users)
+  {
+  }
+
+  /** @return array{access:string}|null */
+  public function __invoke(): ?array
+  {
+    $refresh = $this->jwt->readRefreshFromCookie();
+    if (!$refresh || ($refresh['typ'] ?? '') !== 'refresh') {
+      return null;
+    }
+    $u = $this->users->findById((int) $refresh['sub']);
+    if (!$u) {
+      return null;
+    }
+    [$access,] = $this->jwt->issueFor($u->id(), $u->role());
+    return ['access' => $access];
+  }
+}
+
+
+
+================================================
+FILE: Backend/src/UseCase/Auth/RegisterUser.php
+================================================
+<?php
+declare(strict_types=1);
+
+namespace App\UseCase\Auth;
+
+use App\Domain\Repository\UserRepository;
+use App\Infrastructure\Security\PasswordHasher;
+
+final class RegisterUser
+{
+    public function __construct(
+        private UserRepository $repo,
+        private PasswordHasher $hasher
+    ) {}
+
+    public function execute(
+        string $email,
+        string $password,
+        string $role= 'USER',
+        ?string $firstname,
+        ?string $lastname
+    ): array {
+        if ($this->repo->findByEmail($email)) {
+            throw new \RuntimeException("Email already in use");
+        }
+
+        $hash = $this->hasher->hash($password);
+
+        $user = $this->repo->create(
+            $email,
+            $hash,
+            $role,
+            $firstname,
+            $lastname
+        );
+
+        return [
+            'id' => $user->id(),
+            'email' => $user->email(),
+            'firstname' => $user->firstname(),
+            'lastname' => $user->lastname(),
+            'role' => $user->role(),
+        ];
+    }
+}
+
+
+
+================================================
+FILE: Backend/src/UseCase/Auth/SmsSender.php
+================================================
+<?php
+declare(strict_types=1);
+
+namespace App\UseCase\Auth;
+
+interface SmsSender
+{
+    public function sendTwoFactorSms(string $phone, string $code): void;
+}
+
+
+
+================================================
+FILE: Backend/src/UseCase/Auth/StartTwoFactor.php
+================================================
+<?php
+declare(strict_types=1);
+
+namespace App\UseCase\Auth;
+
+use App\Domain\Repository\UserRepository;
+
+final class StartTwoFactor
+{
+    public function __construct(
+        private UserRepository $userRepository,
+        private Mailer $mailer,
+        private SmsSender $smsSender
+    ) {}
+
+    public function execute(int $userId): void
+    {
+        $user = $this->userRepository->findById($userId);
+
+        if (!$user) {
+            throw new \RuntimeException('User not found');
+        }
+
+        $method = $user->twoFactorMethod();
+
+        // TOTP : pas de code à générer, l’app TOTP a déjà le secret
+        if ($method === 'totp') {
+            return;
+        }
+
+        $code = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+        $expiresAt = (new \DateTimeImmutable())->modify('+5 minutes');
+
+        // User est immuable -> on récupère la nouvelle instance
+        $user = $user->with2FACode($code, $expiresAt);
+        $this->userRepository->save($user);
+
+        if ($method === 'email') {
+            $this->mailer->sendTwoFactorCodeEmail($user->email(), $code);
+        } elseif ($method === 'sms') {
+            $phone = $user->twoFactorPhone();
+            if ($phone === null) {
+                throw new \RuntimeException('User has no phone number for SMS 2FA');
+            }
+            $this->smsSender->sendTwoFactorSms($phone, $code);
+        } else {
+            throw new \RuntimeException('Unknown 2FA method: '.$method);
+        }
+    }
+}
+
+
+
+================================================
+FILE: Backend/src/UseCase/Auth/TotpVerifier.php
+================================================
+<?php
+declare(strict_types=1);
+
+namespace App\UseCase\Auth;
+
+interface TotpVerifier
+{
+    public function verify(string $secret, string $code): bool;
+}
+
+
+
+================================================
+FILE: Backend/src/UseCase/Auth/VerifyTwoFactor.php
+================================================
+<?php
+declare(strict_types=1);
+
+namespace App\UseCase\Auth;
+
+use App\Domain\Repository\UserRepository;
+use App\Infrastructure\Security\JwtManager;
+
+final class VerifyTwoFactor
+{
+  public function __construct(
+    private UserRepository $userRepository,
+    private JwtManager $jwtManager,
+    private TotpVerifier $totpVerifier
+  ) {
+  }
+
+  public function execute(int $userId, string $code): array
+  {
+    $user = $this->userRepository->findById($userId);
+
+    if (!$user) {
+      throw new \RuntimeException('User not found');
+    }
+
+    $method = $user->twoFactorMethod();
+    $now = new \DateTimeImmutable();
+
+    $valid = false;
+
+    if ($method === 'email' || $method === 'sms') {
+      // helper du domaine
+      $valid = $user->hasValid2FACode($code, $now);
+    } elseif ($method === 'totp') {
+      if (!$user->hasTotpConfigured()) {
+        throw new \RuntimeException('TOTP not configured');
+      }
+
+      $secret = $user->twoFactorTotpSecret();
+      if ($secret === null) {
+        throw new \RuntimeException('Missing TOTP secret');
+      }
+
+      $valid = $this->totpVerifier->verify($secret, $code);
+    } else {
+      throw new \RuntimeException('Unknown 2FA method: ' . $method);
+    }
+
+    if (!$valid) {
+      throw new \RuntimeException('Invalid 2FA code');
+    }
+
+    // Nettoyer le challenge pour email/sms
+    if ($method === 'email' || $method === 'sms') {
+      $user = $user->clear2FA();
+      $this->userRepository->save($user);
+    }
+
+    // Génération des JWT
+    [$accessToken, $refreshToken] = $this->jwtManager->issueFor(
+      $user->id(),
+      $user->role()
+    );
+
+    return [
+      'access_token' => $accessToken,
+      'refresh_token' => $refreshToken,
+    ];
+  }
+}
+
+
+
+================================================
+FILE: Backend/tests/Domain/JwtManagerTest.php
+================================================
+<?php
+declare(strict_types=1);
+
+namespace Tests\Domain;
+
+use App\Infrastructure\Security\JwtManager;
+use PHPUnit\Framework\TestCase;
+
+final class JwtManagerTest extends TestCase
+{
+    private JwtManager $jwt;
+
+    protected function setUp(): void
+    {
+
+        $this->jwt = new JwtManager('test-secret-key', 3600, 7200);
+    }
+
+    public function testIssueForReturnsTwoValidTokens(): void
+    {
+        [$access, $refresh] = $this->jwt->issueFor(42, 'USER');
+
+
+        $this->assertIsString($access);
+        $this->assertIsString($refresh);
+        $this->assertNotSame($access, $refresh);
+
+
+        $accessPayload  = $this->jwt->decode($access);
+        $refreshPayload = $this->jwt->decode($refresh);
+
+        $this->assertNotNull($accessPayload);
+        $this->assertNotNull($refreshPayload);
+
+        // Access token : bon sub / role / typ
+        $this->assertSame(42, $accessPayload['sub'] ?? null);
+        $this->assertSame('USER', $accessPayload['role'] ?? null);
+        $this->assertSame('access', $accessPayload['typ'] ?? null);
+
+        // Refresh token : bon sub / typ
+        $this->assertSame(42, $refreshPayload['sub'] ?? null);
+        $this->assertSame('refresh', $refreshPayload['typ'] ?? null);
+
+        // Les deux ont un exp
+        $this->assertArrayHasKey('exp', $accessPayload);
+        $this->assertArrayHasKey('exp', $refreshPayload);
+    }
+
+    public function testDecodeReturnsNullForInvalidToken(): void
+    {
+        $result = $this->jwt->decode('ceci-n-est-pas-un-jwt');
+        $this->assertNull($result);
+    }
+
+    public function testIssuePending2FATokenHasTypeP2(): void
+    {
+        $token   = $this->jwt->issuePending2FAToken(99);
+        $payload = $this->jwt->decode($token);
+
+        $this->assertNotNull($payload);
+        $this->assertSame(99, $payload['sub'] ?? null);
+        $this->assertSame('p2', $payload['typ'] ?? null);
+    }
+}
+
+
+
+================================================
+FILE: Backend/tests/Infrastructure/Security/PasswordHasherTest.php
+================================================
+<?php
+
+declare(strict_types=1);
+
+namespace Tests\Infrastructure\Security;
+
+use App\Infrastructure\Security\PasswordHasher;
+use PHPUnit\Framework\TestCase;
+
+final class PasswordHasherTest extends TestCase
+{
+    public function testHashIsNotPlainPassword(): void
+    {
+        $hasher = new PasswordHasher();
+        $plain  = 'MySecurePassword123!';
+        $hash   = $hasher->hash($plain);
+
+        $this->assertIsString($hash);
+        $this->assertNotSame($plain, $hash, 'Le hash ne doit pas être le mot de passe en clair');
+        $this->assertGreaterThan(20, strlen($hash), 'Le hash doit être suffisamment long');
+    }
+
+    public function testVerifyReturnsTrueWithCorrectPassword(): void
+    {
+        $hasher = new PasswordHasher();
+        $plain  = 'Secret123!';
+        $hash   = $hasher->hash($plain);
+
+        $this->assertTrue($hasher->verify($plain, $hash));
+    }
+
+    public function testVerifyReturnsFalseWithWrongPassword(): void
+    {
+        $hasher = new PasswordHasher();
+        $hash   = $hasher->hash('correct-password');
+
+        $this->assertFalse($hasher->verify('wrong-password', $hash));
+    }
+}
+
+
+
+================================================
+FILE: Backend/tests/UseCase/Auth/InMemoryUserRepository.php
+================================================
+<?php
+declare(strict_types=1);
+
+namespace Tests\UseCase\Auth;
+
+use App\Domain\Entity\User;
+use App\Domain\Repository\UserRepository;
+
+final class InMemoryUserRepository implements UserRepository
+{
+    /** @var User[] */
+    private array $users = [];
+    private int $autoIncrement = 1;
+
+    public function __construct(User ...$users)
+    {
+        foreach ($users as $user) {
+            $this->save($user);
+        }
+    }
+
+    public function create(
+        string $email,
+        string $passwordHash,
+        string $role = 'USER',
+        ?string $firstname = null,
+        ?string $lastname = null
+    ): User {
+        $user = new User(
+            $this->autoIncrement++,
+            $email,
+            $passwordHash,
+            $role,
+            $firstname,
+            $lastname,
+        );
+        $this->save($user);
+        return $user;
+    }
+
+    public function findById(int $id): ?User
+    {
+        return $this->users[$id] ?? null;
+    }
+
+    public function findByEmail(string $email): ?User
+    {
+        foreach ($this->users as $user) {
+            if ($user->email() === $email) {
+                return $user;
+            }
+        }
+        return null;
+    }
+
+    public function save(User $user): void
+    {
+        $this->users[$user->id()] = $user;
+
+        if ($user->id() >= $this->autoIncrement) {
+            $this->autoIncrement = $user->id() + 1;
+        }
+    }
+}
+
+
+
+================================================
+FILE: Backend/tests/UseCase/Auth/LoginUserTest.php
+================================================
+<?php
+declare(strict_types=1);
+
+namespace Tests\UseCase\Auth;
+
+use App\Domain\Entity\User;
+use App\Domain\Repository\UserRepository;
+use App\Infrastructure\Security\PasswordHasher;
+use App\UseCase\Auth\LoginUser;
+use PHPUnit\Framework\TestCase;
+
+/**
+ * Petit repository en mémoire uniquement pour les tests.
+ */
+final class InMemoryUserRepository implements UserRepository
+{
+    /** @var User[] */
+    private array $users = [];
+    private int $autoIncrement = 1;
+
+    public function __construct(User ...$users)
+    {
+        foreach ($users as $user) {
+            $this->save($user);
+        }
+    }
+
+    public function create(string $email, string $passwordHash, string $role = 'USER',    ?string $firstname = null,
+    ?string $lastname = null): User
+    {
+        $user = new User($this->autoIncrement++, $email, $passwordHash, $role);
+        $this->save($user);
+        return $user;
+    }
+
+    public function findById(int $id): ?User
+    {
+        return $this->users[$id] ?? null;
+    }
+
+    public function findByEmail(string $email): ?User
+    {
+        foreach ($this->users as $user) {
+            if ($user->email() === $email) {
+                return $user;
+            }
+        }
+        return null;
+    }
+
+    public function save(User $user): void
+    {
+        $this->users[$user->id()] = $user;
+
+        if ($user->id() >= $this->autoIncrement) {
+            $this->autoIncrement = $user->id() + 1;
+        }
+    }
+}
+
+/**
+ * Tests du cas d’usage LoginUser.
+ */
+final class LoginUserTest extends TestCase
+{
+    private PasswordHasher $hasher;
+
+    protected function setUp(): void
+    {
+        $this->hasher = new PasswordHasher();
+    }
+
+    public function testLoginSucceedsWithValidCredentialsAnd2FAEnabled(): void
+    {
+        $plain = 'MyStrongPassword!';
+        $hash  = $this->hasher->hash($plain);
+
+        // 2FA activée par défaut
+        $user = new User(
+            1,
+            'user@example.com',
+            $hash,
+            'USER'
+        );
+
+        $repo    = new InMemoryUserRepository($user);
+        $useCase = new LoginUser($repo, $this->hasher);
+
+        $result = $useCase->execute('user@example.com', $plain);
+
+        $this->assertTrue($result['success'] ?? false);
+        $this->assertTrue($result['two_factor_required'] ?? false);
+        $this->assertSame(1, $result['user_id'] ?? null);
+        $this->assertSame('USER', $result['role'] ?? null);
+    }
+
+    public function testLoginSucceedsWithValidCredentialsAnd2FADisabled(): void
+    {
+        $plain = 'MyStrongPassword!';
+        $hash  = $this->hasher->hash($plain);
+
+        // On désactive la 2FA via withTwoFactorConfig
+        $user = new User(
+            2,
+            'no2fa@example.com',
+            $hash,
+            'USER'
+        );
+        $user = $user->withTwoFactorConfig(false, 'email');
+
+        $repo    = new InMemoryUserRepository($user);
+        $useCase = new LoginUser($repo, $this->hasher);
+
+        $result = $useCase->execute('no2fa@example.com', $plain);
+
+        $this->assertTrue($result['success'] ?? false);
+        $this->assertFalse($result['two_factor_required'] ?? true);
+        $this->assertSame(2, $result['user_id'] ?? null);
+        $this->assertSame('USER', $result['role'] ?? null);
+    }
+
+    public function testLoginFailsWithWrongPassword(): void
+    {
+        $plain = 'MyStrongPassword!';
+        $hash  = $this->hasher->hash($plain);
+
+        $user = new User(
+            3,
+            'user@example.com',
+            $hash,
+            'USER'
+        );
+
+        $repo    = new InMemoryUserRepository($user);
+        $useCase = new LoginUser($repo, $this->hasher);
+
+        $result = $useCase->execute('user@example.com', 'wrong-password');
+
+        $this->assertFalse($result['success'] ?? true);
+        $this->assertArrayNotHasKey('user_id', $result);
+        $this->assertArrayNotHasKey('role', $result);
+    }
+
+    public function testLoginFailsWithUnknownUser(): void
+    {
+        $repo    = new InMemoryUserRepository(); // aucun user enregistré
+        $useCase = new LoginUser($repo, $this->hasher);
+
+        $result = $useCase->execute('doesnotexist@example.com', 'whatever');
+
+        $this->assertFalse($result['success'] ?? true);
+        $this->assertArrayNotHasKey('user_id', $result);
+        $this->assertArrayNotHasKey('role', $result);
+    }
+}
+
+
+
+================================================
+FILE: frontend/README.md
+================================================
+# Système de Parking Partagé - Frontend
+
+Application React pour la gestion de parkings partagés - Projet HETIC 2025
+
+## Installation
+
+```bash
+npm install
+npm start
+```
+
+L'application sera accessible sur http://localhost:3000
+
+## Technologies
+
+- React 19.2.0
+- React Router DOM 6.30.1
+- TailwindCSS 3.4.18
+- PostCSS + Autoprefixer
+
+## Structure
+
+```
+src/
+├── components/      # Composants réutilisables
+├── pages/           # Pages de l'application
+├── routes/          # Configuration des routes
+├── services/        # Appels API
+├── App.jsx          # Configuration Router
+└── index.js         # Point d'entrée
+```
+
+## Pages principales
+
+- `/` - Accueil
+- `/login` - Connexion
+- `/register` - Inscription (utilisateur/propriétaire)
+- `/dashboard-user` - Espace utilisateur
+- `/dashboard-owner` - Espace propriétaire
+- `/parking/:id` - Détails d'un parking
+
+## Fonctionnalités
+
+### Utilisateurs
+- Inscription avec choix de rôle
+- Réservation de parking
+- Suivi des réservations et stationnements
+
+### Propriétaires
+- Ajout et gestion de parkings
+- Visualisation des statistiques (CA, réservations, stationnements)
+- Modification des tarifs et horaires
+
+## Configuration
+
+Configuration TailwindCSS dans `tailwind.config.js` et `postcss.config.js`
+
+Couleur principale : #34A853
+
+## Scripts
+
+```bash
+npm start     # Développement
+npm run build # Production
+npm test      # Tests
+```
+
+## Backend
+
+Application prête à être connectée au backend PHP sur http://localhost:8001
+
+Tous les appels API sont simulés dans `src/services/apiService.js`
+
+
+
+================================================
+FILE: frontend/AUTHENTIFICATION.md
+================================================
+# 🔐 Documentation Authentification - ParkingPartagé
+
+## 📋 Structure Complète de l'Utilisateur
+
+Chaque utilisateur dans le système possède les champs suivants :
+
+### Champs de Base
+| Champ | Type | Description | Obligatoire |
+|-------|------|-------------|-------------|
+| `id` | number | Identifiant unique | ✅ |
+| `email` | string | Email de connexion | ✅ |
+| `password` | string | Mot de passe (hashé en production) | ✅ |
+| `firstname` | string | Prénom | ✅ |
+| `lastname` | string | Nom | ✅ |
+| `role` | string | 'user' ou 'owner' | ✅ |
+
+### Champs Avancés
+| Champ | Type | Description | Par défaut |
+|-------|------|-------------|------------|
+| `reservations` | array | Liste des réservations | `[]` |
+| `stationnements` | array | Liste des stationnements | `[]` |
+| `typeAbonnement` | string | 'gratuit', 'premium', 'business' | `'gratuit'` |
+| `debutAbonnement` | string/null | Date de début (YYYY-MM-DD) | `null` |
+| `finAbonnement` | string/null | Date de fin (YYYY-MM-DD) | `null` |
+
+---
+
+## 🎯 Types d'Abonnements
+
+### 1. **Gratuit** (par défaut)
+- ✅ Accès aux fonctionnalités de base
+- ✅ Réservations limitées
+- ❌ Pas de priorité
+- ❌ Pas de réductions
+
+### 2. **Premium**
+- ✅ Réservations illimitées
+- ✅ Priorité sur les places
+- ✅ 20% de réduction
+- ✅ Support prioritaire
+
+### 3. **Business**
+- ✅ Tout de Premium +
+- ✅ Facturation mensuelle
+- ✅ Gestion multi-véhicules
+- ✅ API d'intégration
+
+---
+
+## 🔧 Fonctions API Disponibles
+
+### 1. **Authentification**
+
+#### `login(email, password)`
+Connecte un utilisateur existant.
+
+```javascript
+const result = await apiService.login('user@example.com', 'password123');
+// Retourne: { success, token, user }
+```
+
+#### `register(userData)`
+Crée un nouveau compte utilisateur.
+
+```javascript
+const result = await apiService.register({
+  email: 'nouveau@email.com',
+  password: 'motdepasse123',
+  firstname: 'Jean',
+  lastname: 'Dupont',
+  role: 'user'
+});
+// Retourne: { success, message, token, user }
+```
+
+---
+
+### 2. **Gestion Utilisateur**
+
+#### `getUserProfile(token)`
+Récupère les informations complètes de l'utilisateur.
+
+```javascript
+const result = await apiService.getUserProfile(token);
+// Retourne: { success, user }
+```
+
+#### `upgradeAbonnement(token, typeAbonnement, dureeEnMois)`
+Met à niveau l'abonnement de l'utilisateur.
+
+```javascript
+const result = await apiService.upgradeAbonnement(token, 'premium', 12);
+// Retourne: { success, message, user }
+```
+
+---
+
+### 3. **Réservations**
+
+#### `getReservations(token)`
+Récupère toutes les réservations de l'utilisateur.
+
+```javascript
+const result = await apiService.getReservations(token);
+// Retourne: { success, reservations }
+```
+
+#### `reserveParking(token, parkingId, reservationData)`
+Crée une nouvelle réservation.
+
+```javascript
+const result = await apiService.reserveParking(token, 1, {
+  date_debut: '2025-01-15T10:00:00',
+  date_fin: '2025-01-15T18:00:00',
+  montant: 20
+});
+// Retourne: { success, reservation }
+```
+
+---
+
+### 4. **Stationnements**
+
+#### `getStationnements(token)`
+Récupère les stationnements actifs de l'utilisateur.
+
+```javascript
+const result = await apiService.getStationnements(token);
+// Retourne: { success, stationnements }
+```
+
+---
+
+### 5. **Propriétaires (Owner)**
+
+#### `getOwnerParkings(token)`
+Récupère tous les parkings du propriétaire.
+
+```javascript
+const result = await apiService.getOwnerParkings(token);
+// Retourne: { success, parkings }
+```
+
+#### `addParking(token, parkingData)`
+Ajoute un nouveau parking.
+
+```javascript
+const result = await apiService.addParking(token, {
+  nom: 'Mon Parking',
+  adresse: '123 Rue Example',
+  nombre_places: 50,
+  tarif_horaire: 2.5,
+  tarif_journalier: 15,
+  tarif_mensuel: 120,
+  horaire_ouverture: '06:00',
+  horaire_fermeture: '23:00'
+});
+// Retourne: { success, parking }
+```
+
+#### `getMonthlyRevenue(token)`
+Récupère les revenus mensuels du propriétaire.
+
+```javascript
+const result = await apiService.getMonthlyRevenue(token);
+// Retourne: { success, revenus_mensuels }
+```
+
+---
+
+## 📦 Exemple d'Utilisation Complète
+
+### Inscription et Connexion
+
+```javascript
+// 1. Inscription d'un nouvel utilisateur
+try {
+  const registerResult = await apiService.register({
+    email: 'jean.dupont@email.com',
+    password: 'motdepasse123',
+    firstname: 'Jean',
+    lastname: 'Dupont',
+    role: 'user'
+  });
+  
+  // Stocker le token et les infos utilisateur
+  localStorage.setItem('token', registerResult.token);
+  localStorage.setItem('user', JSON.stringify(registerResult.user));
+  
+  console.log('Compte créé:', registerResult.user);
+  // user.typeAbonnement === 'gratuit' par défaut
+  
+} catch (error) {
+  console.error('Erreur inscription:', error.message);
+}
+
+// 2. Connexion d'un utilisateur existant
+try {
+  const loginResult = await apiService.login(
+    'jean.dupont@email.com',
+    'motdepasse123'
+  );
+  
+  localStorage.setItem('token', loginResult.token);
+  localStorage.setItem('user', JSON.stringify(loginResult.user));
+  
+  console.log('Connecté:', loginResult.user);
+  
+} catch (error) {
+  console.error('Erreur connexion:', error.message);
+}
+```
+
+### Mise à Niveau d'Abonnement
+
+```javascript
+const token = localStorage.getItem('token');
+
+try {
+  const upgradeResult = await apiService.upgradeAbonnement(
+    token,
+    'premium',
+    12 // 12 mois
+  );
+  
+  console.log(upgradeResult.message);
+  // "Abonnement premium activé avec succès"
+  
+  // Mettre à jour les infos utilisateur en local
+  const userStr = localStorage.getItem('user');
+  const user = JSON.parse(userStr);
+  user.typeAbonnement = upgradeResult.user.typeAbonnement;
+  user.debutAbonnement = upgradeResult.user.debutAbonnement;
+  user.finAbonnement = upgradeResult.user.finAbonnement;
+  localStorage.setItem('user', JSON.stringify(user));
+  
+} catch (error) {
+  console.error('Erreur upgrade:', error.message);
+}
+```
+
+### Réserver un Parking
+
+```javascript
+const token = localStorage.getItem('token');
+
+try {
+  const reservationResult = await apiService.reserveParking(
+    token,
+    1, // ID du parking
+    {
+      date_debut: '2025-01-15T10:00:00',
+      date_fin: '2025-01-15T18:00:00',
+      montant: 20
+    }
+  );
+  
+  console.log('Réservation confirmée:', reservationResult.reservation);
+  
+} catch (error) {
+  console.error('Erreur réservation:', error.message);
+}
+```
+
+---
+
+## 🔒 Sécurité
+
+### En Production (Backend PHP)
+
+1. **Hachage des mots de passe**
+   - Utiliser `password_hash()` en PHP
+   - Ne jamais stocker les mots de passe en clair
+
+2. **Tokens JWT**
+   - Générer des tokens JWT sécurisés
+   - Expiration après 24h
+   - Refresh tokens pour renouvellement
+
+3. **Validation des données**
+   - Valider tous les inputs côté serveur
+   - Protection contre les injections SQL
+   - Sanitization des données
+
+4. **HTTPS**
+   - Toujours utiliser HTTPS en production
+   - Sécuriser les cookies
+
+---
+
+## ✅ Checklist Trello - Status
+
+- ✅ **email** - Implémenté
+- ✅ **password** - Implémenté
+- ✅ **nom** - Implémenté (lastname)
+- ✅ **prénom** - Implémenté (firstname)
+- ✅ **une liste de réservations** - Implémenté (reservations: [])
+- ✅ **une liste de stationnements** - Implémenté (stationnements: [])
+- ✅ **type d'abonnement** - Implémenté (typeAbonnement)
+- ✅ **début abonnement** - Implémenté (debutAbonnement)
+- ✅ **fin abonnement** - Implémenté (finAbonnement)
+
+---
+
+## 🎨 Intégration Frontend
+
+### Afficher les Infos Utilisateur
+
+```jsx
+// Dans un composant React
+const user = JSON.parse(localStorage.getItem('user'));
+
+return (
+  <div>
+    <h2>Profil de {user.firstname} {user.lastname}</h2>
+    <p>Email: {user.email}</p>
+    <p>Rôle: {user.role}</p>
+    <p>Abonnement: {user.typeAbonnement}</p>
+    {user.typeAbonnement !== 'gratuit' && (
+      <>
+        <p>Début: {user.debutAbonnement}</p>
+        <p>Fin: {user.finAbonnement}</p>
+      </>
+    )}
+    <p>Réservations: {user.reservations.length}</p>
+    <p>Stationnements: {user.stationnements.length}</p>
+  </div>
+);
+```
+
+---
+
+## 🚀 Prochaines Étapes
+
+1. **Backend PHP**
+   - Créer les endpoints API réels
+   - Implémenter l'authentification JWT
+   - Connecter à MySQL
+
+2. **Paiements**
+   - Intégrer Stripe pour les abonnements
+   - Gérer les renouvellements automatiques
+
+3. **Notifications**
+   - Email de confirmation
+   - Rappels de réservation
+   - Alertes d'expiration d'abonnement
+
+---
+
+**Documentation mise à jour le:** 2025-11-20  
+**Version:** 1.0.0
+
+
+
+
+================================================
+FILE: frontend/package.json
+================================================
+{
+  "name": "frontend",
+  "version": "1.0.0",
+  "description": "Application React pour le système de parking partagé - Projet HETIC 2025",
+  "main": "src/main.jsx",
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "eslintConfig": {
+    "extends": [
+      "react-app"
+    ]
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  },
+  "dependencies": {
+    "motion": "^12.23.24",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "react-router-dom": "^6.30.1",
+    "react-scripts": "5.0.1"
+  },
+  "devDependencies": {
+    "autoprefixer": "^10.4.21",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^3.4.18"
+  }
+}
+
+
+
+================================================
+FILE: frontend/postcss.config.js
+================================================
+module.exports = {
+  plugins: {
+    tailwindcss: {},
+    autoprefixer: {},
+  },
+};
+
+
+
+
+================================================
+FILE: frontend/tailwind.config.js
+================================================
+/** @type {import('tailwindcss').Config} */
+module.exports = {
+  content: [
+    "./src/**/*.{js,jsx,ts,tsx}",
+  ],
+  theme: {
+    extend: {
+      colors: {
+        primary: '#1a365d', // Bleu marine élégant et épuré
+        'primary-50': '#f0f4f8',
+        'primary-100': '#d9e2ec',
+        'primary-200': '#bcccdc',
+        'primary-300': '#9fb3c8',
+        'primary-400': '#829ab1',
+        'primary-500': '#627d98',
+        'primary-600': '#486581',
+        'primary-700': '#334e68',
+        'primary-800': '#243b53',
+        'primary-900': '#1a365d',
+      },
+      fontFamily: {
+        sans: ['Inter', 'SF Pro Display', 'system-ui', '-apple-system', 'sans-serif'],
+        display: ['Cabinet Grotesk', 'Inter', 'sans-serif'],
+      },
+    },
+  },
+  plugins: [],
+}
+
+
+
+
+================================================
+FILE: frontend/public/index.html
+================================================
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#34A853" />
+    <meta
+      name="description"
+      content="Système de Parking Partagé - Trouvez et réservez votre place de parking facilement"
+    />
+    <title>ParkingPartagé - Système de Parking Partagé</title>
+  </head>
+  <body>
+    <noscript>Vous devez activer JavaScript pour utiliser cette application.</noscript>
+    <div id="root"></div>
+  </body>
+</html>
+
+
+
+
+================================================
+FILE: frontend/src/App.jsx
+================================================
+import React from "react";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import Home from "./pages/Home.jsx";
+import Login from "./pages/Login.jsx";
+import Register from "./pages/Register.jsx";
+import UserDashboard from "./pages/UserDashboard.jsx";
+import OwnerDashboard from "./pages/OwnerDashboard.jsx";
+import ParkingDetails from "./pages/ParkingDetails.jsx";
+import ProtectedRoute from "./components/ProtectedRoute.jsx";
+
+function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        {/* Routes publiques */}
+        <Route path="/" element={<Home />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+
+        {/* Routes protégées */}
+        <Route
+          path="/dashboard-user"
+          element={
+            <ProtectedRoute role="user">
+              <UserDashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dashboard-owner"
+          element={
+            <ProtectedRoute role="owner">
+              <OwnerDashboard />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Route publique pour les détails de parking */}
+        <Route path="/parking/:id" element={<ParkingDetails />} />
+
+        {/* Redirection pour les routes obsolètes */}
+        <Route path="/dashboard" element={<Navigate to="/dashboard-user" replace />} />
+        <Route path="/owner" element={<Navigate to="/dashboard-owner" replace />} />
+
+        {/* Route 404 */}
+        <Route path="*" element={<Navigate to="/" />} />
+      </Routes>
+    </BrowserRouter>
+  );
+}
+
+export default App;
+
+
+
+================================================
+FILE: frontend/src/index.css
+================================================
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+@layer base {
+  body {
+    margin: 0;
+    font-family: 'Inter', 'SF Pro Display', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    scroll-behavior: smooth;
+    letter-spacing: -0.01em;
+  }
+  
+  /* Curseur personnalisé */
+  * {
+    cursor: default;
+  }
+  
+  button, a, input, [role="button"] {
+    cursor: pointer;
+  }
+  
+  /* Typographie moderne */
+  h1, h2, h3, h4, h5, h6 {
+    letter-spacing: -0.02em;
+    font-weight: 300;
+  }
+}
+
+@layer utilities {
+  /* Animations ultra-fun style Framer */
+  .animate-float {
+    animation: float 3s ease-in-out infinite;
+  }
+  
+  .animate-pulse-fun {
+    animation: pulseFun 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+  
+  .animate-bounce-subtle {
+    animation: bounceSubtle 1s ease-in-out;
+  }
+  
+  @keyframes float {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-10px); }
+  }
+  
+  @keyframes pulseFun {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.9; transform: scale(1.02); }
+  }
+  
+  @keyframes bounceSubtle {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-5px); }
+  }
+  
+  /* Glass effect fun */
+  .glass-effect {
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+  
+  /* Gradient texts fun */
+  .gradient-text {
+    background: linear-gradient(135deg, #4A7C59 0%, #6B9E7B 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+}
+
+
+
+================================================
+FILE: frontend/src/index.js
+================================================
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import App from './App';
+import './index.css';
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
+
+
+
+================================================
+FILE: frontend/src/components/Footer.jsx
+================================================
+import React from "react";
+import { Link } from "react-router-dom";
+
+export default function Footer() {
+  return (
+    <footer className="bg-gray-50 text-gray-600 border-t border-gray-100">
+      <div className="container mx-auto px-6 lg:px-12 py-20">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-16">
+          {/* Logo & Description */}
+          <div className="md:col-span-2 space-y-6">
+            <div className="flex items-center space-x-2">
+              <div className="w-8 h-8 bg-zenpark rounded-full"></div>
+              <span className="text-xl font-light text-gray-900">parkingpartagé</span>
+            </div>
+            <p className="text-gray-500 leading-relaxed max-w-md font-light">
+              La solution simple et moderne pour trouver et réserver votre place de parking partout en France.
+            </p>
+            <div className="flex space-x-4">
+              <a href="#" className="text-gray-400 hover:text-gray-600 transition-colors">
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+                </svg>
+              </a>
+              <a href="#" className="text-gray-400 hover:text-gray-600 transition-colors">
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M23.953 4.57a10 10 0 01-2.825.775 4.958 4.958 0 002.163-2.723c-.951.555-2.005.959-3.127 1.184a4.92 4.92 0 00-8.384 4.482C7.69 8.095 4.067 6.13 1.64 3.162a4.822 4.822 0 00-.666 2.475c0 1.71.87 3.213 2.188 4.096a4.904 4.904 0 01-2.228-.616v.06a4.923 4.923 0 003.946 4.827 4.996 4.996 0 01-2.212.085 4.936 4.936 0 004.604 3.417 9.867 9.867 0 01-6.102 2.105c-.39 0-.779-.023-1.17-.067a13.995 13.995 0 007.557 2.209c9.053 0 13.998-7.496 13.998-13.985 0-.21 0-.42-.015-.63A9.935 9.935 0 0024 4.59z"/>
+                </svg>
+              </a>
+              <a href="#" className="text-gray-400 hover:text-gray-600 transition-colors">
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 0C8.74 0 8.333.015 7.053.072 5.775.132 4.905.333 4.14.63c-.789.306-1.459.717-2.126 1.384S.935 3.35.63 4.14C.333 4.905.131 5.775.072 7.053.012 8.333 0 8.74 0 12s.015 3.667.072 4.947c.06 1.277.261 2.148.558 2.913.306.788.717 1.459 1.384 2.126.667.666 1.336 1.079 2.126 1.384.766.296 1.636.499 2.913.558C8.333 23.988 8.74 24 12 24s3.667-.015 4.947-.072c1.277-.06 2.148-.262 2.913-.558.788-.306 1.459-.718 2.126-1.384.666-.667 1.079-1.335 1.384-2.126.296-.765.499-1.636.558-2.913.06-1.28.072-1.687.072-4.947s-.015-3.667-.072-4.947c-.06-1.277-.262-2.149-.558-2.913-.306-.789-.718-1.459-1.384-2.126C21.319 1.347 20.651.935 19.86.63c-.765-.297-1.636-.499-2.913-.558C15.667.012 15.26 0 12 0zm0 2.16c3.203 0 3.585.016 4.85.071 1.17.055 1.805.249 2.227.415.562.217.96.477 1.382.896.419.42.679.819.896 1.381.164.422.36 1.057.413 2.227.057 1.266.07 1.646.07 4.85s-.015 3.585-.074 4.85c-.061 1.17-.256 1.805-.421 2.227-.224.562-.479.96-.899 1.382-.419.419-.824.679-1.38.896-.42.164-1.065.36-2.235.413-1.274.057-1.649.07-4.859.07-3.211 0-3.586-.015-4.859-.074-1.171-.061-1.816-.256-2.236-.421-.569-.224-.96-.479-1.379-.899-.421-.419-.69-.824-.9-1.38-.165-.42-.359-1.065-.42-2.235-.045-1.26-.061-1.649-.061-4.844 0-3.196.016-3.586.061-4.861.061-1.17.255-1.814.42-2.234.21-.57.479-.96.9-1.381.419-.419.81-.689 1.379-.898.42-.166 1.051-.361 2.221-.421 1.275-.045 1.65-.06 4.859-.06l.045.03zm0 3.678c-3.405 0-6.162 2.76-6.162 6.162 0 3.405 2.76 6.162 6.162 6.162 3.405 0 6.162-2.76 6.162-6.162 0-3.405-2.76-6.162-6.162-6.162zM12 16c-2.21 0-4-1.79-4-4s1.79-4 4-4 4 1.79 4 4-1.79 4-4 4zm7.846-10.405c0 .795-.646 1.44-1.44 1.44-.795 0-1.44-.646-1.44-1.44 0-.794.646-1.439 1.44-1.439.793-.001 1.44.645 1.44 1.439z"/>
+                </svg>
+              </a>
+            </div>
+          </div>
+
+          {/* Links */}
+          <div>
+            <h3 className="text-gray-900 font-light mb-4 text-lg">Liens</h3>
+            <ul className="space-y-3">
+              <li>
+                <Link to="/" className="text-gray-500 hover:text-gray-900 transition-colors font-light">
+                  Accueil
+                </Link>
+              </li>
+              <li>
+                <Link to="/login" className="text-gray-500 hover:text-gray-900 transition-colors font-light">
+                  Connexion
+                </Link>
+              </li>
+              <li>
+                <Link to="/register" className="text-gray-500 hover:text-gray-900 transition-colors font-light">
+                  Inscription
+                </Link>
+              </li>
+            </ul>
+          </div>
+
+          {/* Contact */}
+          <div>
+            <h3 className="text-gray-900 font-light mb-4 text-lg">Contact</h3>
+            <ul className="space-y-3 text-gray-500 font-light">
+              <li>support@parkingpartage.fr</li>
+              <li>01 23 45 67 89</li>
+            </ul>
+          </div>
+        </div>
+
+        <div className="border-t border-gray-200 pt-8 flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0">
+          <p className="text-gray-400 text-sm font-light">
+            © 2025 ParkingPartagé. Tous droits réservés.
+          </p>
+          <div className="flex space-x-8 text-sm">
+            <a href="#" className="text-gray-400 hover:text-gray-600 transition-colors font-light">
+              Confidentialité
+            </a>
+            <a href="#" className="text-gray-400 hover:text-gray-600 transition-colors font-light">
+              Conditions
+            </a>
+            <a href="#" className="text-gray-400 hover:text-gray-600 transition-colors font-light">
+              Mentions légales
+            </a>
+          </div>
+        </div>
+      </div>
+    </footer>
+  );
+}
+
+
+
+================================================
+FILE: frontend/src/components/Header.jsx
+================================================
+import React from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { apiService } from "../services/apiService";
+
+export default function Header() {
+  const navigate = useNavigate();
+  const userStr = localStorage.getItem("user");
+  const user = userStr ? JSON.parse(userStr) : null;
+  const userRole = user?.role?.toLowerCase()?.trim() || null;
+
+  const isLoggedIn = !!user;
+
+  const handleLogout = async () => {
+    try {
+      await apiService.logout();
+    } catch (e) {
+      console.error("Erreur lors de la déconnexion :", e);
+    }
+    localStorage.removeItem("user");
+    navigate("/");
+  };
+
+
+
+  return (
+    <header className="fixed top-6 left-0 right-0 z-50 px-6">
+      <div className="max-w-7xl mx-auto flex justify-between items-center">
+        {/* Logo à gauche */}
+        <Link to="/" className="flex items-center space-x-2">
+          <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-lg">
+            <span className="text-primary font-bold text-xl">P</span>
+          </div>
+        </Link>
+
+        {/* Navigation centrale - Arrondie et séparée */}
+        <nav className="flex items-center bg-gray-900 rounded-full shadow-2xl px-2 py-2">
+          <Link
+            to="/"
+            className="px-6 py-2.5 bg-white text-gray-900 rounded-full font-medium text-sm transition-all duration-300 hover:bg-gray-100"
+          >
+            Accueil
+          </Link>
+          <a
+            href="#services"
+            onClick={(e) => {
+              e.preventDefault();
+              document.querySelector('#services')?.scrollIntoView({ behavior: 'smooth' });
+            }}
+            className="px-6 py-2.5 text-white font-light text-sm transition-all duration-300 hover:text-gray-300 cursor-pointer"
+          >
+            Services
+          </a>
+          <a
+            href="#tarifs"
+            onClick={(e) => {
+              e.preventDefault();
+              document.querySelector('#tarifs')?.scrollIntoView({ behavior: 'smooth' });
+            }}
+            className="px-6 py-2.5 text-white font-light text-sm transition-all duration-300 hover:text-gray-300 cursor-pointer"
+          >
+            Tarifs
+          </a>
+          <a
+            href="#villes"
+            onClick={(e) => {
+              e.preventDefault();
+              document.querySelector('#villes')?.scrollIntoView({ behavior: 'smooth' });
+            }}
+            className="px-6 py-2.5 text-white font-light text-sm transition-all duration-300 hover:text-gray-300 cursor-pointer"
+          >
+            Villes
+          </a>
+        </nav>
+
+        {/* Boutons Connexion/Inscription ou Dashboard */}
+        {isLoggedIn ? (
+          <div className="flex items-center gap-3">
+            {userRole === "owner" ? (
+              <Link
+                to="/dashboard-owner"
+                className="bg-gray-900 text-white px-6 py-2.5 rounded-full text-sm shadow-lg hover:bg-gray-800 transition-all duration-300"
+              >
+                Dashboard
+              </Link>
+            ) : (
+              <Link
+                to="/dashboard-user"
+                className="bg-gray-900 text-white px-6 py-2.5 rounded-full text-sm shadow-lg hover:bg-gray-800 transition-all duration-300"
+              >
+                Mon compte
+              </Link>
+            )}
+            <button
+              onClick={handleLogout}
+              className="bg-white text-gray-900 px-5 py-2.5 rounded-full text-sm shadow-lg hover:bg-gray-100 transition-all duration-300"
+            >
+              Déconnexion
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-3">
+            <Link
+              to="/login"
+              className="bg-white text-gray-900 px-5 py-2.5 rounded-full text-sm shadow-lg hover:bg-gray-100 transition-all duration-300"
+            >
+              Se connecter
+            </Link>
+            <Link
+              to="/register"
+              className="bg-primary text-white px-5 py-2.5 rounded-full text-sm shadow-lg hover:bg-primary/90 transition-all duration-300"
+            >
+              S'inscrire
+            </Link>
+          </div>
+        )}
+
+      </div>
+    </header>
+  );
+}
+
+
+
+================================================
+FILE: frontend/src/components/LoadingScreen.jsx
+================================================
+import React, { useEffect, useState } from 'react';
+
+export default function LoadingScreen({ onLoadingComplete }) {
+  const [progress, setProgress] = useState(0);
+  const [isComplete, setIsComplete] = useState(false);
+
+  useEffect(() => {
+    // Animation de la barre de progression
+    const interval = setInterval(() => {
+      setProgress((prev) => {
+        if (prev >= 100) {
+          clearInterval(interval);
+          setIsComplete(true);
+          setTimeout(() => {
+            onLoadingComplete();
+          }, 500);
+          return 100;
+        }
+        return prev + 2;
+      });
+    }, 30);
+
+    return () => clearInterval(interval);
+  }, [onLoadingComplete]);
+
+  return (
+    <div
+      className={`fixed inset-0 z-[9999] bg-white flex items-center justify-center transition-opacity duration-500 ${
+        isComplete ? 'opacity-0 pointer-events-none' : 'opacity-100'
+      }`}
+    >
+      <div className="max-w-md w-full px-8">
+        {/* Logo / Icône */}
+        <div className="flex justify-center mb-12">
+          <div className="relative">
+            <div className="w-20 h-20 bg-gray-900 rounded-full flex items-center justify-center animate-pulse">
+              <span className="text-white text-3xl font-bold">P</span>
+            </div>
+            {/* Cercle animé autour */}
+            <div className="absolute inset-0 border-4 border-gray-900 rounded-full animate-spin" style={{ borderTopColor: 'transparent', borderRightColor: 'transparent' }}></div>
+          </div>
+        </div>
+
+        {/* Titre */}
+        <h2 className="text-3xl font-light text-gray-900 text-center mb-3 tracking-tight">
+          ParkingPartagé
+        </h2>
+        <p className="text-sm text-gray-500 font-light text-center mb-12">
+          Chargement en cours...
+        </p>
+
+        {/* Barre de progression minimaliste */}
+        <div className="relative">
+          <div className="w-full h-1 bg-gray-100 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-gray-900 rounded-full transition-all duration-300 ease-out"
+              style={{ width: `${progress}%` }}
+            ></div>
+          </div>
+          {/* Pourcentage */}
+          <div className="text-xs text-gray-400 font-light text-center mt-4">
+            {progress}%
+          </div>
+        </div>
+
+        {/* Dots animés */}
+        <div className="flex justify-center gap-2 mt-12">
+          <div className="w-2 h-2 bg-gray-300 rounded-full animate-bounce" style={{ animationDelay: '0s' }}></div>
+          <div className="w-2 h-2 bg-gray-300 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+          <div className="w-2 h-2 bg-gray-300 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+
+
+================================================
+FILE: frontend/src/components/ParkingCard.jsx
+================================================
+import React from "react";
+import { useNavigate } from "react-router-dom";
+
+export default function ParkingCard({ parking }) {
+  const navigate = useNavigate();
+  const token = localStorage.getItem("token");
+
+  const handleReserve = () => {
+    if (!token) {
+      navigate("/login");
+      return;
+    }
+    navigate(`/parking/${parking.id}/reserve`);
+  };
+
+  return (
+    <div className="bg-white rounded-2xl shadow hover:shadow-lg transition overflow-hidden cursor-pointer">
+      {/* Image du parking */}
+      <div className="relative h-48 bg-gray-200 overflow-hidden">
+        {parking.image ? (
+          <img
+            src={parking.image}
+            alt={parking.nom}
+            className="w-full h-full object-cover hover:scale-110 transition duration-500"
+          />
+        ) : (
+          <div className="w-full h-full bg-gradient-to-br from-zenpark-100 to-zenpark-200 flex items-center justify-center">
+            <svg className="w-16 h-16 text-zenpark" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" />
+            </svg>
+          </div>
+        )}
+        
+        {/* Badge disponibilité */}
+        {parking.nombre_places && (
+          <div className="absolute top-4 right-4 bg-white px-3 py-1.5 rounded-full shadow">
+            <span className="text-sm font-semibold text-zenpark">
+              {parking.nombre_places} places
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Contenu */}
+      <div className="p-6">
+        <h3 className="text-xl font-semibold mb-2 text-gray-900">
+          {parking.nom || "Parking"}
+        </h3>
+        
+        <div className="flex items-start mb-4">
+          <svg className="w-4 h-4 text-gray-400 mr-2 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+          <p className="text-gray-600 text-sm">
+            {parking.adresse || "Adresse non disponible"}
+          </p>
+        </div>
+
+        {/* Informations tarifaires */}
+        <div className="space-y-2 mb-5">
+          {parking.tarif_horaire && (
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-600">Horaire</span>
+              <span className="font-semibold text-zenpark">{parking.tarif_horaire} €</span>
+            </div>
+          )}
+          {parking.tarif_journalier && (
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-600">Journalier</span>
+              <span className="font-semibold text-zenpark">{parking.tarif_journalier} €</span>
+            </div>
+          )}
+          {parking.tarif_mensuel && (
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-600">Mensuel</span>
+              <span className="font-semibold text-zenpark">{parking.tarif_mensuel} €</span>
+            </div>
+          )}
+        </div>
+
+        {/* Bouton réserver */}
+        <button
+          onClick={handleReserve}
+          className="w-full bg-zenpark text-white py-3 rounded-xl hover:bg-zenpark-700 transition font-medium"
+        >
+          Réserver
+        </button>
+      </div>
+    </div>
+  );
+}
+
+
+
+================================================
+FILE: frontend/src/components/ProtectedRoute.jsx
+================================================
+import React from "react";
+import { Navigate } from "react-router-dom";
+
+export default function ProtectedRoute({ children, role }) {
+  const userStr = localStorage.getItem("user");
+  const user = userStr ? JSON.parse(userStr) : null;
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  const userRole = user.role?.toLowerCase().trim();
+
+  if (role && userRole !== role.toLowerCase().trim()) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return children;
+}
+
+
+
+================================================
+FILE: frontend/src/components/SearchBar.jsx
+================================================
+import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
+
+export default function SearchBar() {
+  const [location, setLocation] = useState("");
+  const [date, setDate] = useState("");
+  const [focused, setFocused] = useState(null);
+  const navigate = useNavigate();
+
+  const handleSearch = async (e) => {
+    e.preventDefault();
+    if (location) {
+      try {
+        const response = await fetch(
+          `http://localhost:8001/api/parkings?location=${encodeURIComponent(location)}`,
+          {
+            headers: {
+              Authorization: `Bearer ${localStorage.getItem("token")}` || "",
+            },
+          }
+        );
+        if (response.ok) {
+          const data = await response.json();
+          console.log("Parkings trouvés:", data);
+        }
+      } catch (error) {
+        console.error("Erreur lors de la recherche:", error);
+      }
+    }
+  };
+
+  return (
+    <form onSubmit={handleSearch} className="w-full max-w-4xl mx-auto scale-in">
+      <div className="bg-white rounded-3xl shadow-2xl overflow-hidden hover:shadow-3xl transition-all duration-500 border border-gray-100">
+        <div className="flex flex-col md:flex-row divide-y md:divide-y-0 md:divide-x divide-gray-100">
+          {/* Location Input */}
+          <div 
+            className={`flex-1 p-6 md:p-8 transition-all duration-300 ${
+              focused === 'location' ? 'bg-gray-50' : 'bg-white'
+            }`}
+          >
+            <label className="block text-xs font-medium text-gray-500 mb-3 uppercase tracking-wider">
+              Destination
+            </label>
+            <input
+              type="text"
+              placeholder="Où souhaitez-vous vous garer ?"
+              value={location}
+              onChange={(e) => setLocation(e.target.value)}
+              onFocus={() => setFocused('location')}
+              onBlur={() => setFocused(null)}
+              className="w-full text-lg md:text-xl text-gray-900 font-light focus:outline-none placeholder-gray-300 bg-transparent"
+            />
+          </div>
+
+          {/* Date Input */}
+          <div 
+            className={`flex-1 p-6 md:p-8 transition-all duration-300 ${
+              focused === 'date' ? 'bg-gray-50' : 'bg-white'
+            }`}
+          >
+            <label className="block text-xs font-medium text-gray-500 mb-3 uppercase tracking-wider">
+              Date & heure
+            </label>
+            <input
+              type="datetime-local"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              onFocus={() => setFocused('date')}
+              onBlur={() => setFocused(null)}
+              className="w-full text-lg md:text-xl text-gray-900 font-light focus:outline-none bg-transparent"
+            />
+          </div>
+
+          {/* Search Button */}
+          <div className="p-4 md:p-6 flex items-center justify-center">
+            <button
+              type="submit"
+              className="w-full md:w-auto bg-zenpark text-white px-10 py-4 rounded-2xl hover:bg-zenpark-700 transition-all duration-300 font-light text-lg shadow-lg hover:shadow-xl hover:-translate-y-0.5 flex items-center justify-center space-x-2"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <span>Rechercher</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Quick suggestions */}
+      <div className="mt-6 flex flex-wrap justify-center gap-3">
+        {['Paris', 'Lyon', 'Marseille', 'Toulouse', 'Nice'].map((city) => (
+          <button
+            key={city}
+            type="button"
+            onClick={() => setLocation(city)}
+            className="px-5 py-2 bg-white/20 backdrop-blur-xl border border-white/30 text-white rounded-full hover:bg-white/30 transition-all duration-300 text-sm font-light"
+          >
+            {city}
+          </button>
+        ))}
+      </div>
+    </form>
+  );
+}
+
+
+
+================================================
+FILE: frontend/src/pages/Dashboard.jsx
+================================================
+import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import Header from "../components/Header";
+import Footer from "../components/Footer";
+
+export default function Dashboard() {
+  const navigate = useNavigate();
+  const [reservations, setReservations] = useState([]);
+  const [abonnements, setAbonnements] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      navigate("/login");
+      return;
+    }
+
+    // Récupérer les réservations
+    fetch("http://localhost:8001/api/reservations", {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    })
+      .then((res) => {
+        if (res.status === 401) {
+          localStorage.removeItem("token");
+          navigate("/login");
+          return null;
+        }
+        return res.json();
+      })
+      .then((data) => {
+        if (data) {
+          setReservations(data.reservations || data || []);
+        }
+      })
+      .catch((err) => {
+        console.error("Erreur lors de la récupération des réservations:", err);
+        setError("Erreur lors du chargement des données");
+      });
+
+    // Récupérer les abonnements
+    fetch("http://localhost:8001/api/abonnements", {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    })
+      .then((res) => {
+        if (res.status === 401) {
+          return null;
+        }
+        return res.json();
+      })
+      .then((data) => {
+        if (data) {
+          setAbonnements(data.abonnements || data || []);
+        }
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error("Erreur lors de la récupération des abonnements:", err);
+        setLoading(false);
+      });
+  }, [navigate]);
+
+  const handleEnterParking = (reservationId) => {
+    // Simuler l'entrée dans un parking
+    const token = localStorage.getItem("token");
+    fetch(`http://localhost:8001/api/reservations/${reservationId}/enter`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        alert("Vous êtes entré dans le parking !");
+        // Recharger les données
+        window.location.reload();
+      })
+      .catch((err) => {
+        alert("Erreur lors de l'entrée dans le parking");
+      });
+  };
+
+  const handleExitParking = (reservationId) => {
+    // Simuler la sortie d'un parking
+    const token = localStorage.getItem("token");
+    fetch(`http://localhost:8001/api/reservations/${reservationId}/exit`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        alert("Vous êtes sorti du parking !");
+        // Recharger les données
+        window.location.reload();
+      })
+      .catch((err) => {
+        alert("Erreur lors de la sortie du parking");
+      });
+  };
+
+  return (
+    <div className="min-h-screen flex flex-col">
+      <Header />
+      <main className="flex-1 container mx-auto px-4 py-8">
+        <h1 className="text-3xl font-bold mb-8 text-gray-800">
+          Mon tableau de bord
+        </h1>
+
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6">
+              {error}
+            </div>
+          )}
+
+          {/* Réservations */}
+          <section className="mb-12">
+            <h2 className="text-2xl font-semibold mb-4 text-gray-700">
+              Mes réservations
+            </h2>
+            {loading ? (
+              <p className="text-gray-500">Chargement...</p>
+            ) : reservations.length === 0 ? (
+              <div className="bg-gray-50 rounded-lg p-8 text-center">
+                <p className="text-gray-600">
+                  Vous n'avez aucune réservation pour le moment.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {reservations.map((reservation) => (
+                  <div
+                    key={reservation.id}
+                    className="bg-white rounded-xl shadow-md p-6"
+                  >
+                    <h3 className="text-xl font-bold mb-2">
+                      {reservation.parking_nom || "Parking"}
+                    </h3>
+                    <p className="text-gray-600 mb-2">
+                      {reservation.date_debut && reservation.date_fin
+                        ? `${new Date(reservation.date_debut).toLocaleDateString()} - ${new Date(reservation.date_fin).toLocaleDateString()}`
+                        : "Date non spécifiée"}
+                    </p>
+                    <p className="text-gray-700 mb-4">
+                      <span className="font-semibold">Statut:</span>{" "}
+                      {reservation.statut || "En attente"}
+                    </p>
+                    <div className="flex gap-2">
+                      {reservation.statut === "confirmée" && (
+                        <>
+                          <button
+                            onClick={() => handleEnterParking(reservation.id)}
+                            className="flex-1 bg-[#34A853] text-white py-2 rounded-lg hover:bg-[#2d8f45] transition font-medium"
+                          >
+                            Entrer
+                          </button>
+                          <button
+                            onClick={() => handleExitParking(reservation.id)}
+                            className="flex-1 bg-gray-600 text-white py-2 rounded-lg hover:bg-gray-700 transition font-medium"
+                          >
+                            Sortir
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          {/* Abonnements */}
+          <section>
+            <h2 className="text-2xl font-semibold mb-4 text-gray-700">
+              Mes abonnements
+            </h2>
+            {loading ? (
+              <p className="text-gray-500">Chargement...</p>
+            ) : abonnements.length === 0 ? (
+              <div className="bg-gray-50 rounded-lg p-8 text-center">
+                <p className="text-gray-600">
+                  Vous n'avez aucun abonnement pour le moment.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {abonnements.map((abonnement) => (
+                  <div
+                    key={abonnement.id}
+                    className="bg-white rounded-xl shadow-md p-6"
+                  >
+                    <h3 className="text-xl font-bold mb-2">
+                      {abonnement.parking_nom || "Parking"}
+                    </h3>
+                    <p className="text-gray-600 mb-2">
+                      Abonnement mensuel
+                    </p>
+                    <p className="text-gray-700">
+                      <span className="font-semibold">Prix:</span>{" "}
+                      {abonnement.prix_mensuel || "N/A"} €/mois
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+      </main>
+      <Footer />
+    </div>
+  );
+}
+  
+
+
+================================================
+FILE: frontend/src/pages/Login.jsx
+================================================
+// frontend/src/pages/Login.jsx
+import React, { useState } from "react";
+import { useNavigate, Link } from "react-router-dom";
+import { apiService } from "../services/apiService";
+import Header from "../components/Header";
+import Footer from "../components/Footer";  
+
+export default function Login() {
+  const navigate = useNavigate();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+
+    try {
+      const result = await apiService.login(email, password);
+
+      if (result.success) {
+        localStorage.setItem("user", JSON.stringify(result.user));
+
+        if (result.user.role?.toLowerCase?.().trim() === "owner") {
+
+          navigate("/dashboard-owner");
+        } else {
+          navigate("/dashboard-user");
+        }
+      }
+    } catch (err) {
+      setError(err.message || "Identifiants incorrects");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex flex-col bg-gradient-to-br from-gray-50 to-white">
+      <Header />
+      <main className="flex-1 flex items-center justify-center py-32 px-6">
+        <div className="w-full max-w-md">
+          <div className="bg-white rounded-3xl shadow-2xl p-10 border border-gray-100">
+            {/* Logo */}
+            <div className="flex justify-center mb-8">
+              <div className="w-16 h-16 bg-gray-900 rounded-full flex items-center justify-center">
+                <span className="text-white text-2xl font-bold">P</span>
+              </div>
+            </div>
+
+            <h1 className="text-4xl font-light text-center mb-3 text-gray-900 tracking-tight">
+              Connexion
+            </h1>
+            <p className="text-center text-gray-500 mb-10 font-light">
+              Bienvenue ! Connectez-vous à votre compte
+            </p>
+
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div>
+                <label className="block text-gray-700 font-light mb-3 text-sm">
+                  Adresse email
+                </label>
+                <input
+                  type="email"
+                  placeholder="votre@email.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full px-5 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-gray-900 focus:bg-white transition-all duration-300 font-light"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-gray-700 font-light mb-3 text-sm">
+                  Mot de passe
+                </label>
+                <input
+                  type="password"
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full px-5 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-gray-900 focus:bg-white transition-all duration-300 font-light"
+                  required
+                />
+              </div>
+
+              {error && (
+                <div className="bg-red-50 border border-red-200 text-red-700 px-5 py-4 rounded-2xl text-sm font-light">
+                  {error}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full bg-gray-900 text-white py-5 rounded-2xl hover:bg-gray-800 transition-all duration-300 font-light text-base disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl hover:-translate-y-0.5"
+              >
+                {loading ? "Connexion en cours..." : "Se connecter"}
+              </button>
+            </form>
+
+            <div className="mt-10 text-center">
+              <p className="text-gray-500 font-light text-sm">
+                Pas encore de compte ?{" "}
+                <Link
+                  to="/register"
+                  className="text-gray-900 hover:text-gray-700 font-medium transition-colors"
+                >
+                  Créer un compte
+                </Link>
+              </p>
+            </div>
+          </div>
+        </div>
+      </main>
+      <Footer />
+    </div>
+  );
+}
+
+
+
+================================================
+FILE: frontend/src/pages/OwnerDashboard.jsx
+================================================
+import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import Header from "../components/Header";
+import Footer from "../components/Footer";
+import { apiService } from "../services/apiService";
+
+export default function OwnerDashboard() {
+  const navigate = useNavigate();
+  const [parkings, setParkings] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [showEditForm, setShowEditForm] = useState(null);
+  const userStr = localStorage.getItem("user");
+  const user = userStr ? JSON.parse(userStr) : null;
+
+  const [monthlyRevenue, setMonthlyRevenue] = useState(0);
+  const [activeReservations, setActiveReservations] = useState(0);
+  const [activeStationnements, setActiveStationnements] = useState(0);
+
+  const [newParking, setNewParking] = useState({
+    nom: "",
+    adresse: "",
+    nombre_places: "",
+    tarif_horaire: "",
+    tarif_journalier: "",
+    tarif_mensuel: "",
+    horaire_ouverture: "",
+    horaire_fermeture: "",
+  });
+
+  useEffect(() => {
+    apiService.getCurrentUser().then((me) => {
+      if (!me || me.role !== "owner") {
+        navigate("/login");
+      }
+    });
+
+    loadData();
+  }, [navigate]);
+
+  const loadData = async () => {
+    const token = localStorage.getItem("token");
+    setLoading(true);
+    setError("");
+
+    try {
+      const parkingsResult = await apiService.getOwnerParkings(token);
+      if (parkingsResult.success) {
+        setParkings(parkingsResult.parkings || []);
+      }
+
+      const revenueResult = await apiService.getMonthlyRevenue(token);
+      if (revenueResult.success) {
+        setMonthlyRevenue(revenueResult.revenus_mensuels || 0);
+      }
+
+      const reservationsResult = await apiService.getActiveReservations(token);
+      if (reservationsResult.success) {
+        setActiveReservations(reservationsResult.reservations_en_cours || 0);
+      }
+
+      const stationnementsResult = await apiService.getActiveStationnements(token);
+      if (stationnementsResult.success) {
+        setActiveStationnements(stationnementsResult.stationnements_actifs || 0);
+      }
+    } catch (err) {
+      setError(err.message || "Erreur lors du chargement des données");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAddParking = async (e) => {
+    e.preventDefault();
+    const token = localStorage.getItem("token");
+    setError("");
+
+    try {
+      const result = await apiService.addParking(token, newParking);
+
+      if (result.success) {
+        setParkings([...parkings, result.parking]);
+        setNewParking({
+          nom: "",
+          adresse: "",
+          nombre_places: "",
+          tarif_horaire: "",
+          tarif_journalier: "",
+          tarif_mensuel: "",
+          horaire_ouverture: "",
+          horaire_fermeture: "",
+        });
+        setShowAddForm(false);
+        loadData();
+      }
+    } catch (err) {
+      setError(err.message || "Erreur lors de l'ajout du parking");
+    }
+  };
+
+  const handleUpdateParking = async (parkingId, updatedData) => {
+    setError("");
+    try {
+      setParkings(
+        parkings.map((p) => (p.id === parkingId ? { ...p, ...updatedData } : p))
+      );
+      setShowEditForm(null);
+    } catch (err) {
+      setError(err.message || "Erreur lors de la modification");
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex flex-col bg-gray-50">
+      <Header />
+      <main className="flex-1">
+        {/* Hero Section */}
+        <section className="bg-zenpark text-white py-12">
+          <div className="container mx-auto px-6 lg:px-12">
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-4xl font-serif font-normal mb-2">
+                  Espace propriétaire
+                </h1>
+                <p className="text-white/90 text-lg">
+                  Gérez vos parkings et suivez vos revenus
+                </p>
+              </div>
+              <button
+                onClick={() => setShowAddForm(true)}
+                className="hidden md:block bg-white text-zenpark px-6 py-3 rounded-xl hover:bg-gray-100 transition font-medium"
+              >
+                + Ajouter un parking
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <div className="container mx-auto px-6 lg:px-12 py-12">
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 px-6 py-4 rounded-xl mb-8">
+              {error}
+            </div>
+          )}
+
+          {/* Stats */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+            <div className="bg-white rounded-2xl shadow p-6">
+              <h3 className="text-sm text-gray-600 mb-2">Revenus mensuels</h3>
+              <p className="text-3xl font-bold text-zenpark">{monthlyRevenue.toFixed(2)} €</p>
+            </div>
+
+            <div className="bg-white rounded-2xl shadow p-6">
+              <h3 className="text-sm text-gray-600 mb-2">Réservations en cours</h3>
+              <p className="text-3xl font-bold text-zenpark">{activeReservations}</p>
+            </div>
+
+            <div className="bg-white rounded-2xl shadow p-6">
+              <h3 className="text-sm text-gray-600 mb-2">Stationnements actifs</h3>
+              <p className="text-3xl font-bold text-zenpark">{activeStationnements}</p>
+            </div>
+          </div>
+
+          {/* Formulaire d'ajout */}
+          {showAddForm && (
+            <div className="bg-white rounded-2xl shadow p-8 mb-12">
+              <h2 className="text-2xl font-serif font-normal mb-6 text-gray-900">
+                Ajouter un parking
+              </h2>
+
+              <form onSubmit={handleAddParking} className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-gray-700 font-medium mb-2">Nom du parking</label>
+                    <input
+                      type="text"
+                      placeholder="Ex: Parking Gare Lyon"
+                      value={newParking.nom}
+                      onChange={(e) => setNewParking({ ...newParking, nom: e.target.value })}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-zenpark focus:border-zenpark transition"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 font-medium mb-2">Adresse</label>
+                    <input
+                      type="text"
+                      placeholder="123 Rue de la Gare"
+                      value={newParking.adresse}
+                      onChange={(e) => setNewParking({ ...newParking, adresse: e.target.value })}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-zenpark focus:border-zenpark transition"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 font-medium mb-2">Nombre de places</label>
+                    <input
+                      type="number"
+                      placeholder="50"
+                      value={newParking.nombre_places}
+                      onChange={(e) => setNewParking({ ...newParking, nombre_places: e.target.value })}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-zenpark focus:border-zenpark transition"
+                      required
+                      min="1"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 font-medium mb-2">Tarif horaire (€)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      placeholder="2.50"
+                      value={newParking.tarif_horaire}
+                      onChange={(e) => setNewParking({ ...newParking, tarif_horaire: e.target.value })}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-zenpark focus:border-zenpark transition"
+                      required
+                      min="0"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 font-medium mb-2">Tarif journalier (€)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      placeholder="15.00"
+                      value={newParking.tarif_journalier}
+                      onChange={(e) => setNewParking({ ...newParking, tarif_journalier: e.target.value })}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-zenpark focus:border-zenpark transition"
+                      required
+                      min="0"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 font-medium mb-2">Tarif mensuel (€)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      placeholder="120.00"
+                      value={newParking.tarif_mensuel}
+                      onChange={(e) => setNewParking({ ...newParking, tarif_mensuel: e.target.value })}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-zenpark focus:border-zenpark transition"
+                      required
+                      min="0"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 font-medium mb-2">Heure d'ouverture</label>
+                    <input
+                      type="time"
+                      value={newParking.horaire_ouverture}
+                      onChange={(e) => setNewParking({ ...newParking, horaire_ouverture: e.target.value })}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-zenpark focus:border-zenpark transition"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 font-medium mb-2">Heure de fermeture</label>
+                    <input
+                      type="time"
+                      value={newParking.horaire_fermeture}
+                      onChange={(e) => setNewParking({ ...newParking, horaire_fermeture: e.target.value })}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-zenpark focus:border-zenpark transition"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-4">
+                  <button type="submit" className="bg-zenpark text-white px-8 py-3 rounded-xl hover:bg-zenpark-700 transition font-medium">
+                    Ajouter le parking
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowAddForm(false)}
+                    className="bg-gray-200 text-gray-700 px-8 py-3 rounded-xl hover:bg-gray-300 transition font-medium"
+                  >
+                    Annuler
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* Liste des parkings */}
+          <section>
+            <h2 className="text-3xl font-serif font-normal mb-6 text-gray-900">
+              Mes parkings ({parkings.length})
+            </h2>
+
+            {loading ? (
+              <div className="bg-white rounded-2xl shadow p-12 text-center">
+                <p className="text-gray-600">Chargement...</p>
+              </div>
+            ) : parkings.length === 0 ? (
+              <div className="bg-white rounded-2xl shadow p-12 text-center">
+                <p className="text-gray-600 mb-6">
+                  Vous n'avez pas encore de parking. Ajoutez-en un !
+                </p>
+                <button
+                  onClick={() => setShowAddForm(true)}
+                  className="bg-zenpark text-white px-8 py-3 rounded-xl hover:bg-zenpark-700 transition font-medium"
+                >
+                  Ajouter mon premier parking
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {parkings.map((parking) => (
+                  <div key={parking.id} className="bg-white rounded-2xl shadow p-6">
+                    <h3 className="text-xl font-semibold text-gray-900 mb-3">{parking.nom}</h3>
+                    <p className="text-gray-600 text-sm mb-4">{parking.adresse}</p>
+
+                    <div className="space-y-2 mb-4 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Places:</span>
+                        <span className="font-medium">{parking.nombre_places}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Tarif horaire:</span>
+                        <span className="font-medium text-zenpark">{parking.tarif_horaire} €</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Tarif journalier:</span>
+                        <span className="font-medium text-zenpark">{parking.tarif_journalier} €</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Horaires:</span>
+                        <span className="font-medium">{parking.horaire_ouverture} - {parking.horaire_fermeture}</span>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => setShowEditForm(showEditForm === parking.id ? null : parking.id)}
+                      className="w-full bg-gray-100 text-gray-900 py-2 rounded-xl hover:bg-gray-200 transition font-medium"
+                    >
+                      {showEditForm === parking.id ? 'Annuler' : 'Modifier'}
+                    </button>
+
+                    {showEditForm === parking.id && (
+                      <form
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          const formData = new FormData(e.target);
+                          const updatedData = {
+                            tarif_horaire: formData.get("tarif_horaire"),
+                            tarif_journalier: formData.get("tarif_journalier"),
+                            tarif_mensuel: formData.get("tarif_mensuel"),
+                            horaire_ouverture: formData.get("horaire_ouverture"),
+                            horaire_fermeture: formData.get("horaire_fermeture"),
+                          };
+                          handleUpdateParking(parking.id, updatedData);
+                        }}
+                        className="mt-4 space-y-3 pt-4 border-t border-gray-100"
+                      >
+                        <input
+                          type="number"
+                          step="0.01"
+                          name="tarif_horaire"
+                          defaultValue={parking.tarif_horaire}
+                          placeholder="Tarif horaire"
+                          className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-zenpark"
+                        />
+                        <input
+                          type="number"
+                          step="0.01"
+                          name="tarif_journalier"
+                          defaultValue={parking.tarif_journalier}
+                          placeholder="Tarif journalier"
+                          className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-zenpark"
+                        />
+                        <input
+                          type="number"
+                          step="0.01"
+                          name="tarif_mensuel"
+                          defaultValue={parking.tarif_mensuel}
+                          placeholder="Tarif mensuel"
+                          className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-zenpark"
+                        />
+                        <input
+                          type="time"
+                          name="horaire_ouverture"
+                          defaultValue={parking.horaire_ouverture}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-zenpark"
+                        />
+                        <input
+                          type="time"
+                          name="horaire_fermeture"
+                          defaultValue={parking.horaire_fermeture}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-zenpark"
+                        />
+                        <button
+                          type="submit"
+                          className="w-full bg-zenpark text-white py-2 rounded-xl hover:bg-zenpark-700 transition font-medium"
+                        >
+                          Enregistrer
+                        </button>
+                      </form>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        </div>
+      </main>
+      <Footer />
+    </div>
+  );
+}
+
+
+
+================================================
+FILE: frontend/src/pages/ParkingDetails.jsx
+================================================
+import React, { useState, useEffect } from "react";
+import { useNavigate, useParams, Link } from "react-router-dom";
+import Header from "../components/Header";
+import Footer from "../components/Footer";
+import { apiService } from "../services/apiService";
+
+export default function ParkingDetails() {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const [parking, setParking] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [showReservationForm, setShowReservationForm] = useState(false);
+  const [reservationForm, setReservationForm] = useState({
+    date_debut: "",
+    date_fin: "",
+    type: "journalier", // horaire, journalier, mensuel
+  });
+
+  useEffect(() => {
+    loadParkingDetails();
+  }, [id]);
+
+  const loadParkingDetails = async () => {
+    setLoading(true);
+    setError("");
+
+    try {
+      const result = await apiService.getParkingDetails(id);
+      if (result.success) {
+        setParking(result.parking);
+      }
+    } catch (err) {
+      setError(err.message || "Erreur lors du chargement des détails du parking");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleReserve = async (e) => {
+    e.preventDefault();
+    const token = localStorage.getItem("token");
+
+    if (!token) {
+      navigate("/login");
+      return;
+    }
+
+    setError("");
+
+    try {
+      const result = await apiService.reserveParking(token, id, reservationForm);
+      
+      if (result.success) {
+        alert("Réservation confirmée avec succès !");
+        navigate("/dashboard-user");
+      }
+    } catch (err) {
+      setError(err.message || "Erreur lors de la réservation");
+    }
+  };
+
+  const calculatePrice = () => {
+    if (!parking || !reservationForm.date_debut || !reservationForm.date_fin) {
+      return 0;
+    }
+
+    const start = new Date(reservationForm.date_debut);
+    const end = new Date(reservationForm.date_fin);
+    const diffHours = (end - start) / (1000 * 60 * 60);
+
+    switch (reservationForm.type) {
+      case "horaire":
+        return (diffHours * parseFloat(parking.tarif_horaire)).toFixed(2);
+      case "journalier":
+        const days = Math.ceil(diffHours / 24);
+        return (days * parseFloat(parking.tarif_journalier)).toFixed(2);
+      case "mensuel":
+        return parseFloat(parking.tarif_mensuel).toFixed(2);
+      default:
+        return 0;
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex flex-col">
+        <Header />
+        <main className="flex-1 flex items-center justify-center">
+          <p className="text-gray-600">Chargement...</p>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
+  if (error && !parking) {
+    return (
+      <div className="min-h-screen flex flex-col">
+        <Header />
+        <main className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <p className="text-red-600 mb-4">{error}</p>
+            <Link
+              to="/"
+              className="text-[#34A853] hover:underline font-medium"
+            >
+              Retour à l'accueil
+            </Link>
+          </div>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen flex flex-col">
+      <Header />
+      <main className="flex-1 container mx-auto px-4 py-8">
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6">
+            {error}
+          </div>
+        )}
+
+        {parking && (
+          <>
+            {/* En-tête du parking */}
+            <div className="mb-8">
+              <Link
+                to="/"
+                className="text-[#34A853] hover:underline font-medium mb-4 inline-block"
+              >
+                ← Retour à la liste
+              </Link>
+              <h1 className="text-4xl font-bold mb-4 text-gray-800">
+                {parking.nom}
+              </h1>
+              <p className="text-lg text-gray-600">{parking.adresse}</p>
+            </div>
+
+            {/* Informations du parking */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+              <div className="bg-white rounded-xl shadow-md p-6">
+                <h2 className="text-2xl font-bold mb-4 text-gray-800">
+                  Informations
+                </h2>
+                <div className="space-y-3">
+                  <p>
+                    <span className="font-semibold">Places disponibles:</span>{" "}
+                    {parking.places_disponibles || parking.nombre_places} / {parking.nombre_places}
+                  </p>
+                  <p>
+                    <span className="font-semibold">Horaires:</span>{" "}
+                    {parking.horaire_ouverture} - {parking.horaire_fermeture}
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-xl shadow-md p-6">
+                <h2 className="text-2xl font-bold mb-4 text-gray-800">
+                  Tarifs
+                </h2>
+                <div className="space-y-3">
+                  <p>
+                    <span className="font-semibold">Horaire:</span>{" "}
+                    {parking.tarif_horaire} €
+                  </p>
+                  <p>
+                    <span className="font-semibold">Journalier:</span>{" "}
+                    {parking.tarif_journalier} €
+                  </p>
+                  <p>
+                    <span className="font-semibold">Mensuel:</span>{" "}
+                    {parking.tarif_mensuel} €
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Formulaire de réservation */}
+            <div className="bg-white rounded-xl shadow-md p-6">
+              <h2 className="text-2xl font-bold mb-4 text-gray-800">
+                Réserver ce parking
+              </h2>
+              
+              {!showReservationForm ? (
+                <button
+                  onClick={() => setShowReservationForm(true)}
+                  className="bg-[#34A853] text-white px-6 py-3 rounded-lg hover:bg-[#2d8f45] transition font-medium"
+                >
+                  Réserver
+                </button>
+              ) : (
+                <form onSubmit={handleReserve} className="space-y-4">
+                  <div>
+                    <label className="block text-gray-700 font-medium mb-2">
+                      Type de réservation
+                    </label>
+                    <div className="flex gap-4">
+                      <label className="flex items-center cursor-pointer">
+                        <input
+                          type="radio"
+                          name="type"
+                          value="horaire"
+                          checked={reservationForm.type === "horaire"}
+                          onChange={(e) =>
+                            setReservationForm({
+                              ...reservationForm,
+                              type: e.target.value,
+                            })
+                          }
+                          className="mr-2"
+                        />
+                        <span>Horaire</span>
+                      </label>
+                      <label className="flex items-center cursor-pointer">
+                        <input
+                          type="radio"
+                          name="type"
+                          value="journalier"
+                          checked={reservationForm.type === "journalier"}
+                          onChange={(e) =>
+                            setReservationForm({
+                              ...reservationForm,
+                              type: e.target.value,
+                            })
+                          }
+                          className="mr-2"
+                        />
+                        <span>Journalier</span>
+                      </label>
+                      <label className="flex items-center cursor-pointer">
+                        <input
+                          type="radio"
+                          name="type"
+                          value="mensuel"
+                          checked={reservationForm.type === "mensuel"}
+                          onChange={(e) =>
+                            setReservationForm({
+                              ...reservationForm,
+                              type: e.target.value,
+                            })
+                          }
+                          className="mr-2"
+                        />
+                        <span>Mensuel</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-gray-700 font-medium mb-2">
+                        Date et heure de début
+                      </label>
+                      <input
+                        type="datetime-local"
+                        value={reservationForm.date_debut}
+                        onChange={(e) =>
+                          setReservationForm({
+                            ...reservationForm,
+                            date_debut: e.target.value,
+                          })
+                        }
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#34A853]"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-gray-700 font-medium mb-2">
+                        Date et heure de fin
+                      </label>
+                      <input
+                        type="datetime-local"
+                        value={reservationForm.date_fin}
+                        onChange={(e) =>
+                          setReservationForm({
+                            ...reservationForm,
+                            date_fin: e.target.value,
+                          })
+                        }
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#34A853]"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  {reservationForm.date_debut && reservationForm.date_fin && (
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <p className="font-semibold text-gray-800">
+                        Prix estimé: {calculatePrice()} €
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="flex gap-2">
+                    <button
+                      type="submit"
+                      className="bg-[#34A853] text-white px-6 py-3 rounded-lg hover:bg-[#2d8f45] transition font-medium"
+                    >
+                      Confirmer la réservation
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowReservationForm(false)}
+                      className="bg-gray-300 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-400 transition"
+                    >
+                      Annuler
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
+          </>
+        )}
+      </main>
+      <Footer />
+    </div>
+  );
+}
+
+
+
+
+================================================
+FILE: frontend/src/pages/Register.jsx
+================================================
+import React, { useState } from "react";
+import { useNavigate, Link } from "react-router-dom";
+import Header from "../components/Header";
+import Footer from "../components/Footer";
+import { apiService } from "../services/apiService";
+
+export default function Register() {
+  const navigate = useNavigate();
+  const [form, setForm] = useState({
+    firstname: "",
+    lastname: "",
+    email: "",
+    password: "",
+    role: "user",
+  });
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleChange = (e) => {
+    setForm({ ...form, [e.target.name]: e.target.value });
+  };
+
+const handleSubmit = async (e) => {
+  e.preventDefault();
+  setError("");
+  setSuccess("");
+  setLoading(true);
+
+  try {
+    const result = await apiService.register(form);
+
+    if (result.success) {
+      // PLUS DE TOKEN, on stocke juste le user
+      localStorage.setItem("user", JSON.stringify(result.user));
+
+      setSuccess("Compte créé avec succès !");
+      setTimeout(() => {
+        if (result.user.role === "owner") {
+          navigate("/dashboard-owner");
+        } else {
+          navigate("/dashboard-user");
+        }
+      }, 1500);
+    } else {
+      setError("Impossible de créer le compte.");
+    }
+  } catch (err) {
+    setError(err.message || "Erreur lors de l'inscription");
+  } finally {
+    setLoading(false);
+  }
+};
+
+  return (
+    <div className="min-h-screen flex flex-col bg-gradient-to-br from-gray-50 to-white">
+      <Header />
+      <main className="flex-1 flex items-center justify-center py-32 px-6">
+        <div className="w-full max-w-md">
+          <div className="bg-white rounded-3xl shadow-2xl p-10 border border-gray-100">
+            {/* Logo */}
+            <div className="flex justify-center mb-8">
+              <div className="w-16 h-16 bg-gray-900 rounded-full flex items-center justify-center">
+                <span className="text-white text-2xl font-bold">P</span>
+              </div>
+            </div>
+
+            <h1 className="text-4xl font-light text-center mb-3 text-gray-900 tracking-tight">
+              Inscription
+            </h1>
+            <p className="text-center text-gray-500 mb-10 font-light">
+              Créez votre compte en quelques instants
+            </p>
+
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-gray-700 font-light mb-3 text-sm">
+                    Prénom
+                  </label>
+                  <input
+                    name="firstname"
+                    placeholder="John"
+                    value={form.firstname}
+                    onChange={handleChange}
+                    className="w-full px-5 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-gray-900 focus:bg-white transition-all duration-300 font-light"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-gray-700 font-light mb-3 text-sm">
+                    Nom
+                  </label>
+                  <input
+                    name="lastname"
+                    placeholder="Doe"
+                    value={form.lastname}
+                    onChange={handleChange}
+                    className="w-full px-5 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-gray-900 focus:bg-white transition-all duration-300 font-light"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-gray-700 font-light mb-3 text-sm">
+                  Adresse email
+                </label>
+                <input
+                  type="email"
+                  name="email"
+                  placeholder="votre@email.com"
+                  value={form.email}
+                  onChange={handleChange}
+                  className="w-full px-5 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-gray-900 focus:bg-white transition-all duration-300 font-light"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-gray-700 font-light mb-3 text-sm">
+                  Mot de passe
+                </label>
+                <input
+                  type="password"
+                  name="password"
+                  placeholder="Minimum 6 caractères"
+                  value={form.password}
+                  onChange={handleChange}
+                  className="w-full px-5 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-gray-900 focus:bg-white transition-all duration-300 font-light"
+                  required
+                  minLength="6"
+                />
+              </div>
+
+              <div>
+                <label className="block text-gray-700 font-light mb-4 text-sm">
+                  Je m'inscris en tant que
+                </label>
+                <div className="grid grid-cols-2 gap-4">
+                  <label className={`cursor-pointer rounded-2xl border-2 p-5 transition-all duration-300 ${
+                    form.role === "user" 
+                      ? 'border-gray-900 bg-gray-900 text-white shadow-lg' 
+                      : 'border-gray-200 bg-gray-50 hover:border-gray-300 hover:bg-white'
+                  }`}>
+                    <input
+                      type="radio"
+                      name="role"
+                      value="user"
+                      checked={form.role === "user"}
+                      onChange={handleChange}
+                      className="sr-only"
+                      required
+                    />
+                    <div className="text-center">
+                      <div className={`font-medium mb-2 ${form.role === "user" ? 'text-white' : 'text-gray-900'}`}>
+                        Utilisateur
+                      </div>
+                      <div className={`text-xs ${form.role === "user" ? 'text-white/80' : 'text-gray-500'} font-light`}>
+                        Je cherche un parking
+                      </div>
+                    </div>
+                  </label>
+                  
+                  <label className={`cursor-pointer rounded-2xl border-2 p-5 transition-all duration-300 ${
+                    form.role === "owner" 
+                      ? 'border-gray-900 bg-gray-900 text-white shadow-lg' 
+                      : 'border-gray-200 bg-gray-50 hover:border-gray-300 hover:bg-white'
+                  }`}>
+                    <input
+                      type="radio"
+                      name="role"
+                      value="owner"
+                      checked={form.role === "owner"}
+                      onChange={handleChange}
+                      className="sr-only"
+                      required
+                    />
+                    <div className="text-center">
+                      <div className={`font-medium mb-2 ${form.role === "owner" ? 'text-white' : 'text-gray-900'}`}>
+                        Propriétaire
+                      </div>
+                      <div className={`text-xs ${form.role === "owner" ? 'text-white/80' : 'text-gray-500'} font-light`}>
+                        Je loue mon parking
+                      </div>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              {success && (
+                <div className="bg-green-50 border border-green-200 text-green-700 px-5 py-4 rounded-2xl text-sm font-light">
+                  {success}
+                </div>
+              )}
+
+              {error && (
+                <div className="bg-red-50 border border-red-200 text-red-700 px-5 py-4 rounded-2xl text-sm font-light">
+                  {error}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full bg-gray-900 text-white py-5 rounded-2xl hover:bg-gray-800 transition-all duration-300 font-light text-base disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl hover:-translate-y-0.5"
+              >
+                {loading ? "Création en cours..." : "Créer mon compte"}
+              </button>
+            </form>
+
+            <div className="mt-10 text-center">
+              <p className="text-gray-500 font-light text-sm">
+                Déjà un compte ?{" "}
+                <Link
+                  to="/login"
+                  className="text-gray-900 hover:text-gray-700 font-medium transition-colors"
+                >
+                  Se connecter
+                </Link>
+              </p>
+            </div>
+          </div>
+        </div>
+      </main>
+      <Footer />
+    </div>
+  );
+}
+
+
+
+================================================
+FILE: frontend/src/pages/UserDashboard.jsx
+================================================
+import React, { useState, useEffect } from "react";
+import { useNavigate, Link } from "react-router-dom";
+import Header from "../components/Header";
+import Footer from "../components/Footer";
+import { apiService } from "../services/apiService";
+
+export default function UserDashboard() {
+  const navigate = useNavigate();
+
+  const [user, setUser] = useState(() => {
+    const userStr = localStorage.getItem("user");
+    return userStr ? JSON.parse(userStr) : null;
+  });
+
+  const [reservations, setReservations] = useState([]);
+  const [stationnements, setStationnements] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  // Récupérer les infos de l'utilisateur depuis le back
+  useEffect(() => {
+    const fetchUser = async () => {
+      setLoading(true);
+      setError("");
+
+      try {
+        const currentUser = await apiService.getCurrentUser();
+
+        if (!currentUser) {
+          // Pas connecté côté back → on redirige
+          navigate("/login");
+          return;
+        }
+
+        setUser(currentUser);
+        // On synchronise localStorage au cas où
+        localStorage.setItem("user", JSON.stringify(currentUser));
+
+        // TODO: plus tard, quand les API existeront :
+        // const reservationsRes = await apiService.getReservations();
+        // setReservations(reservationsRes.reservations || []);
+        // const stationnementsRes = await apiService.getStationnements();
+        // setStationnements(stationnementsRes.stationnements || []);
+      } catch (err) {
+        console.error(err);
+        setError(
+          err.message || "Erreur lors du chargement des informations utilisateur"
+        );
+        navigate("/login");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUser();
+  }, [navigate]);
+
+  return (
+    <div className="min-h-screen flex flex-col bg-gray-50">
+      <Header />
+      <main className="flex-1 pt-28">
+        {/* Hero Section */}
+        <section className="bg-zenpark text-white py-12">
+          <div className="container mx-auto px-6 lg:px-12">
+            <h1 className="text-4xl font-serif font-normal mb-2">
+              Bonjour{" "}
+              {user?.email
+                ? user.email
+                : "Utilisateur"}
+            </h1>
+            <p className="text-white/90 text-lg">
+              Bienvenue sur votre espace personnel
+            </p>
+            {user?.role && (
+              <p className="mt-2 text-white/80 text-sm">
+                Rôle :{" "}
+                <span className="inline-block px-3 py-1 rounded-full bg-white/10 border border-white/20">
+                  {user.role === "owner" ? "Propriétaire de parking" : "Client"}
+                </span>
+              </p>
+            )}
+          </div>
+        </section>
+
+        <div className="container mx-auto px-6 lg:px-12 py-12">
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 px-6 py-4 rounded-xl mb-8">
+              {error}
+            </div>
+          )}
+
+          {/* Carte infos utilisateur */}
+          <section className="mb-10">
+            <div className="bg-white rounded-2xl shadow p-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+              <div>
+                <h2 className="text-2xl font-serif font-normal text-gray-900 mb-1">
+                  Mes informations
+                </h2>
+                <p className="text-gray-600 text-sm">
+                  Récapitulatif de votre compte Parking Project.
+                </p>
+              </div>
+              {user && (
+                <div className="space-y-1 text-sm text-gray-700">
+                  <p>
+                    <span className="font-medium">Email :</span>{" "}
+                    {user.email}
+                  </p>
+                  <p>
+                    <span className="font-medium">Rôle :</span>{" "}
+                    {user.role === "owner" ? "Propriétaire" : "Utilisateur"}
+                  </p>
+                </div>
+              )}
+            </div>
+          </section>
+
+          {/* Quick Actions */}
+          <div className="mb-12">
+            <Link
+              to="/"
+              className="inline-block bg-zenpark text-white px-8 py-4 rounded-xl hover:bg-zenpark-700 transition font-medium"
+            >
+              Nouvelle réservation
+            </Link>
+          </div>
+
+          {/* Section Réservations */}
+          <section className="mb-12">
+            <h2 className="text-3xl font-serif font-normal mb-6 text-gray-900">
+              Mes réservations
+            </h2>
+
+            {loading ? (
+              <div className="bg-white rounded-2xl shadow p-12 text-center">
+                <p className="text-gray-600">Chargement...</p>
+              </div>
+            ) : reservations.length === 0 ? (
+              <div className="bg-white rounded-2xl shadow p-12 text-center">
+                <p className="text-gray-600 mb-6">
+                  Vous n&apos;avez aucune réservation pour le moment.
+                </p>
+                <Link
+                  to="/"
+                  className="inline-block bg-zenpark text-white px-8 py-3 rounded-xl hover:bg-zenpark-700 transition font-medium"
+                >
+                  Réserver une place
+                </Link>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {reservations.map((reservation) => (
+                  <div
+                    key={reservation.id}
+                    className="bg-white rounded-2xl shadow p-6 hover:shadow-lg transition"
+                  >
+                    <h3 className="text-xl font-semibold text-gray-900 mb-3">
+                      {reservation.parking_nom || "Parking"}
+                    </h3>
+
+                    <div className="space-y-2 mb-4">
+                      <p className="text-gray-600 text-sm">
+                        {reservation.date_debut && reservation.date_fin
+                          ? `${new Date(
+                              reservation.date_debut
+                            ).toLocaleDateString("fr-FR")} - ${new Date(
+                              reservation.date_fin
+                            ).toLocaleDateString("fr-FR")}`
+                          : "Date non spécifiée"}
+                      </p>
+                      <p className="text-gray-700">
+                        <span className="font-medium">Statut :</span>{" "}
+                        <span
+                          className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${
+                            reservation.statut === "confirmée"
+                              ? "bg-green-100 text-green-800"
+                              : "bg-yellow-100 text-yellow-800"
+                          }`}
+                        >
+                          {reservation.statut || "En attente"}
+                        </span>
+                      </p>
+                      {reservation.montant && (
+                        <p className="text-lg font-semibold text-zenpark">
+                          {reservation.montant} €
+                        </p>
+                      )}
+                    </div>
+
+                    <Link
+                      to={`/parking/${reservation.parking_id}`}
+                      className="block w-full text-center bg-gray-100 text-gray-900 py-2 rounded-xl hover:bg-gray-200 transition font-medium"
+                    >
+                      Voir les détails
+                    </Link>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          {/* Section Stationnements actifs */}
+          {stationnements.length > 0 && (
+            <section className="mb-12">
+              <h2 className="text-3xl font-serif font-normal mb-6 text-gray-900">
+                Stationnements actifs
+              </h2>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {stationnements.map((stationnement) => (
+                  <div
+                    key={stationnement.id}
+                    className="bg-white rounded-2xl shadow p-6"
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-xl font-semibold text-gray-900">
+                        {stationnement.parking_nom || "Parking"}
+                      </h3>
+                      <span className="flex h-3 w-3 relative">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+                      </span>
+                    </div>
+
+                    <p className="text-gray-600 text-sm">
+                      Début :{" "}
+                      {stationnement.date_debut
+                        ? new Date(
+                            stationnement.date_debut
+                          ).toLocaleString("fr-FR")
+                        : "N/A"}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+        </div>
+      </main>
+      <Footer />
+    </div>
+  );
+}
+
+
+
+================================================
+FILE: frontend/src/routes/index.jsx
+================================================
+// Configuration des routes de l'application
+export const routes = {
+  home: '/',
+  login: '/login',
+  register: '/register',
+  dashboardUser: '/dashboard-user',
+  dashboardOwner: '/dashboard-owner',
+  parkingDetails: '/parking/:id',
+};
+
+
+
+
+================================================
+FILE: frontend/src/services/apiService.js
+================================================
+// frontend/src/services/apiService.js
+const API_BASE_URL = "http://localhost:8001";
+
+async function handleResponse(response) {
+  let data = null;
+  try {
+    data = await response.json();
+  } catch {
+    // certains endpoints peuvent ne pas renvoyer de JSON
+  }
+
+  if (!response.ok) {
+    const message =
+      data?.error ||
+      data?.message ||
+      `Erreur API (${response.status})`;
+    throw new Error(message);
+  }
+
+  return data;
+}
+
+/**
+ * Helper interne :
+ * - fait le fetch avec credentials: "include"
+ * - sur 401, tente un refresh puis rejoue la requête une fois
+ */
+async function authFetch(path, options = {}, retry = true) {
+  const res = await fetch(`${API_BASE_URL}${path}`, {
+    credentials: "include",
+    ...options,
+  });
+
+  if (res.status === 401 && retry) {
+    // tentative de refresh silencieux
+    const refreshed = await apiService.refresh();
+    if (!refreshed) {
+      return res; // token mort, on laisse la 401
+    }
+
+    // on rejoue la requête UNE seule fois
+    return authFetch(path, options, false);
+  }
+
+  return res;
+}
+
+export const apiService = {
+  /**
+   * Connexion utilisateur :
+   * - POST /api/auth/login
+   * - puis /api/me via authFetch (token fraîchement posé)
+   */
+  async login(email, password) {
+    const res = await fetch(`${API_BASE_URL}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ email, password }),
+    });
+
+    const data = await handleResponse(res);
+
+    if (data.status === "2fa_required") {
+      throw new Error(
+        "Double authentification requise (2FA), pas encore gérée côté interface."
+      );
+    }
+
+    const meRes = await authFetch("/api/me", {
+      method: "GET",
+    });
+
+    const me = await handleResponse(meRes);
+
+    return {
+      success: true,
+      user: {
+        id: me.id,
+        email: me.email,
+        firstname: me.firstname,
+        lastname: me.lastname,
+        role: me.role ? me.role.toLowerCase().trim() : "user",
+
+      },
+    };
+  },
+
+  /**
+   * Inscription :
+   * - POST /api/auth/register
+   * - puis login auto
+   */
+  async register(form) {
+    const res = await fetch(`${API_BASE_URL}/api/auth/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        firstname: form.firstname,
+        lastname: form.lastname,
+        email: form.email,
+        password: form.password,
+        role: form.role === "owner" ? "OWNER" : "USER",
+      }),
+    });
+
+    const data = await handleResponse(res);
+
+    // le back pose déjà les cookies ici.
+    // maintenant on récupère /api/me comme dans login()
+    const meRes = await authFetch("/api/me", { method: "GET" });
+    const me = await handleResponse(meRes);
+
+    return {
+      success: true,
+      user: {
+        id: me.id,
+        email: me.email,
+        role: me.role ? me.role.toLowerCase().trim() : "user",
+        firstname: me.firstname,
+        lastname: me.lastname,
+      },
+    };
+  }
+  ,
+
+  /**
+   * Récupère l'utilisateur courant :
+   * - GET /api/me
+   * - si 401 → tente un refresh → rejoue /api/me
+   * - si toujours 401 → retourne null
+   */
+  async getCurrentUser() {
+    const res = await authFetch("/api/me", {
+      method: "GET",
+    });
+
+    if (res.status === 401) {
+      // même après refresh → pas connecté
+      return null;
+    }
+
+    const me = await handleResponse(res);
+
+    return {
+      id: me.id,
+      email: me.email,
+      role: me.role ? me.role.toLowerCase().trim() : "user",
+
+    };
+  },
+
+  /**
+   * Appelle /api/auth/refresh pour obtenir un nouveau ACCESS_TOKEN
+   * Retourne true si ça a marché, false sinon.
+   */
+  async refresh() {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
+        method: "POST",
+        credentials: "include",
+      });
+
+      if (!res.ok) {
+        return false;
+      }
+
+      await handleResponse(res); // on ignore le contenu, on veut juste savoir si c'est ok
+      return true;
+    } catch {
+      return false;
+    }
+  },
+
+  /**
+   * Déconnexion : purge les cookies côté back
+   */
+  async logout() {
+    await fetch(`${API_BASE_URL}/api/auth/logout`, {
+      method: "POST",
+      credentials: "include",
+    });
+  },
+};
+
+
+
+================================================
+FILE: frontend/src/UI/Countup.jsx
+================================================
+import { useInView, useMotionValue, useSpring } from 'motion/react';
+import { useCallback, useEffect, useRef } from 'react';
+
+export default function CountUp({
+  to,
+  from = 0,
+  direction = 'up',
+  delay = 0,
+  duration = 2,
+  className = '',
+  startWhen = true,
+  separator = '',
+  onStart,
+  onEnd
+}) {
+  const ref = useRef(null);
+  const motionValue = useMotionValue(direction === 'down' ? to : from);
+
+  const damping = 20 + 40 * (1 / duration);
+  const stiffness = 100 * (1 / duration);
+
+  const springValue = useSpring(motionValue, {
+    damping,
+    stiffness
+  });
+
+  const isInView = useInView(ref, { once: true, margin: '0px' });
+
+  const getDecimalPlaces = num => {
+    const str = num.toString();
+
+    if (str.includes('.')) {
+      const decimals = str.split('.')[1];
+
+      if (parseInt(decimals) !== 0) {
+        return decimals.length;
+      }
+    }
+
+    return 0;
+  };
+
+  const maxDecimals = Math.max(getDecimalPlaces(from), getDecimalPlaces(to));
+
+  const formatValue = useCallback(
+    latest => {
+      const hasDecimals = maxDecimals > 0;
+
+      const options = {
+        useGrouping: !!separator,
+        minimumFractionDigits: hasDecimals ? maxDecimals : 0,
+        maximumFractionDigits: hasDecimals ? maxDecimals : 0
+      };
+
+      const formattedNumber = Intl.NumberFormat('en-US', options).format(latest);
+
+      return separator ? formattedNumber.replace(/,/g, separator) : formattedNumber;
+    },
+    [maxDecimals, separator]
+  );
+
+  useEffect(() => {
+    if (ref.current) {
+      ref.current.textContent = formatValue(direction === 'down' ? to : from);
+    }
+  }, [from, to, direction, formatValue]);
+
+  useEffect(() => {
+    if (isInView && startWhen) {
+      if (typeof onStart === 'function') onStart();
+
+      const timeoutId = setTimeout(() => {
+        motionValue.set(direction === 'down' ? from : to);
+      }, delay * 1000);
+
+      const durationTimeoutId = setTimeout(
+        () => {
+          if (typeof onEnd === 'function') onEnd();
+        },
+        delay * 1000 + duration * 1000
+      );
+
+      return () => {
+        clearTimeout(timeoutId);
+        clearTimeout(durationTimeoutId);
+      };
+    }
+  }, [isInView, startWhen, motionValue, direction, from, to, delay, onStart, onEnd, duration]);
+
+  useEffect(() => {
+    const unsubscribe = springValue.on('change', latest => {
+      if (ref.current) {
+        ref.current.textContent = formatValue(latest);
+      }
+    });
+
+    return () => unsubscribe();
+  }, [springValue, formatValue]);
+
+  return <span className={className} ref={ref} />;
+}
+
+
+
+================================================
+FILE: sql/001_init_core.sql
+================================================
+-- ------------------------------------------------------------
+-- Base & options
+-- ------------------------------------------------------------
+CREATE DATABASE IF NOT EXISTS `parking_app`
+  DEFAULT CHARACTER SET utf8mb4
+  DEFAULT COLLATE utf8mb4_unicode_ci;
+
+USE `parking_app`;
+
+-- (Facultatif mais utile en dev)
+SET NAMES utf8mb4;
+SET time_zone = '+00:00';
+SET sql_mode = 'STRICT_ALL_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION';
+
+-- ------------------------------------------------------------
+-- Table: users
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `users` (
+  `id`                  BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `email`               VARCHAR(190)    NOT NULL,
+  `password_hash`       VARCHAR(255)    NOT NULL,
+  `role`                ENUM('USER','OWNER','ADMIN') NOT NULL DEFAULT 'USER',
+
+  -- 2FA
+  `two_factor_enabled`  TINYINT(1) NOT NULL DEFAULT 0,
+  `two_factor_method`   ENUM('email','totp') NOT NULL DEFAULT 'email',
+  `two_factor_last_code`    VARCHAR(10)  DEFAULT NULL,
+  `two_factor_expires_at`   DATETIME     DEFAULT NULL,
+
+  -- Métadonnées
+  `created_at`          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uniq_user_email` (`email`),
+  KEY `idx_user_created_at` (`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ------------------------------------------------------------
+-- Seed de base (mots de passe à définir ensuite via UPDATE)
+-- ------------------------------------------------------------
+INSERT INTO `users` (`email`, `password_hash`, `role`, `two_factor_enabled`)
+VALUES
+  ('demo@example.com', '__SET_AFTER__', 'USER', 0),
+  ('test@parking.com', '__SET_AFTER__', 'ADMIN', 1)  -- ADMIN avec 2FA activée
+ON DUPLICATE KEY UPDATE email = VALUES(`email`);
+
+
