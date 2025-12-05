@@ -1,6 +1,8 @@
 <?php
+namespace App\Domain\Entity;
+use DateTime;
 
-class Parking
+class parking
 {
     private string $gps;
     private float $tarif;
