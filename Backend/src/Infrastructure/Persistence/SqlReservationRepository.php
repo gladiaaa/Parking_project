@@ -8,6 +8,7 @@ namespace App\Infrastructure\Persistence;
 use App\Domain\Entity\parking;
 use App\Domain\Entity\User;
 use App\Domain\Repository\ParkingReservationRepository;
+use DateTimeImmutable;
 use PDO;
 
 final class SqlReservationRepository implements ParkingReservationRepository
@@ -41,7 +42,7 @@ final class SqlReservationRepository implements ParkingReservationRepository
         }
         // --- CAS 2: Mise à jour (UPDATE) ---
         else {
-            $sql = "UPDATE parkings 
+            $sql = "UPDATE reservations 
                     SET gps = :gps, tarif = :tarif, heure_debut = :h_deb, heure_fin = :h_fin 
                     WHERE id = :id";
 
@@ -55,6 +56,18 @@ final class SqlReservationRepository implements ParkingReservationRepository
             ]);
         }
     }
+    public function delete(Parking $reservation): void
+    {
+        // TODO: Implement delete() method.
+    }
 
+    public function getById(int $reservationId): ?parking
+    {
+        // TODO: Implement getById() method.
+    }
 
+    public function isPlaceReserved(int $placeId, DateTimeImmutable $heureDebut, DateTimeImmutable $heureFin): bool
+    {
+        // TODO: Implement isPlaceReserved() method.
+    }
 }

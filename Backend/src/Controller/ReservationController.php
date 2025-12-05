@@ -1,16 +1,21 @@
 <?php
-declare(strict_types=1);
 
-namespace App\Controller;
+use App\Infrastructure\Http\Response;
 
-
-use AllowDynamicProperties;
-use ParkingReservation;
-
-#[AllowDynamicProperties] final class ReservationController
+final class ReservationController
 {
-    public function __construct(ParkingReservation $reservationService) {
-        $this->reservationService = $reservationService;
+
+    public function __construct(
+        private ReservationManagement $reservationManagement
+    ) {}
+
+    public function newAction(): Response
+    {
+
+        $places = $this->reservationService->save();
+        return $this->render('reservation/new.html.twig', [
+            'places' => $places
+        ]);
     }
 
 }
