@@ -4,7 +4,6 @@ use App\Infrastructure\Http\Response;
 
 final class ReservationController
 {
-
     public function __construct(
         private ReservationManagement $reservationManagement
     ) {}
