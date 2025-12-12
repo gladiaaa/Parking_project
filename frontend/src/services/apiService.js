@@ -130,5 +130,48 @@ export const apiService = {
         console.error("Erreur getStationnements:", error);
         return { success: false, stationnements: [] };
     }
+  },
+
+  /**
+   * --- OWNER METHODS ---
+   */
+  async getOwnerParkings(token) {
+    const response = await fetch(`${API_BASE_URL}/owner/parkings`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+    });
+    return handleResponse(response);
+  },
+
+  async addParking(token, parkingData) {
+    const response = await fetch(`${API_BASE_URL}/parkings`, {
+        method: 'POST',
+        headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(parkingData)
+    });
+    return handleResponse(response);
+  },
+
+  async getMonthlyRevenue(token) {
+      const response = await fetch(`${API_BASE_URL}/owner/stats`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+      });
+      return handleResponse(response);
+  },
+
+  async getActiveReservations(token) {
+      const response = await fetch(`${API_BASE_URL}/owner/stats`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+      });
+      return handleResponse(response);
+  },
+
+  async getActiveStationnements(token) {
+      const response = await fetch(`${API_BASE_URL}/owner/stats`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+      });
+      return handleResponse(response);
   }
 };

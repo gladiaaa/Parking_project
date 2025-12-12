@@ -1,8 +1,6 @@
 <?php
 declare(strict_types=1);
 
-use PDO;
-
 function env(string $key, $default=null) {
   static $cfg;
   if (!$cfg) {
