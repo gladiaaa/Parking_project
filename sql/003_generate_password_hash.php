@@ -34,3 +34,7 @@ echo "Pour vérifier que le hash fonctionne:\n";
 echo "php -r \"var_dump(password_verify('password123', '{$hash}'));\"\n";
 echo "Devrait afficher: bool(true)\n";
 
+
+
+
+

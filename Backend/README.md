@@ -87,3 +87,7 @@ php -S localhost:8001 -t public
 - Pour connecter le vrai backend, modifier `API_BASE_URL` dans `apiService.js`
 - Les mots de passe de test : `password123` (hashé avec bcrypt)
 
+
+
+
+
