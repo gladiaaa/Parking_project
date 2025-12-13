@@ -26,7 +26,7 @@ body {
   /* Typographie moderne */
   h1, h2, h3, h4, h5, h6 {
     letter-spacing: -0.02em;
-    font-weight: 300;
+    /* font-weight: 300; - REMOVED to allow utility classes to work */
   }
 }
 

@@ -3,129 +3,118 @@ declare(strict_types=1);
 
 namespace App\Controller;
 
-use App\Infrastructure\Repository\ParkingRepository;
-use App\Infrastructure\Repository\ReservationRepository;
+use App\UseCase\Parking\SearchParkings;
+use App\UseCase\Parking\CheckAvailability;
+use App\UseCase\Parking\GetParkingDetails;
+use App\UseCase\Parking\GetOwnerParkings;
+use App\UseCase\Parking\CreateParking;
+use App\UseCase\Parking\GetOwnerStatistics;
+use Exception;
 
 class ParkingController {
-    private ParkingRepository $parkingRepo;
-    private ReservationRepository $reservationRepo;
-
-    public function __construct() {
-        $this->parkingRepo = new ParkingRepository();
-        $this->reservationRepo = new ReservationRepository();
-    }
+    
+    // Note: Plus besoin d'injecter les repos ici car les UseCases s'en occupent
 
     public function list(array $params): array {
-        $filters = [
-            'ville' => $params['ville'] ?? '',
-            'vehicule' => $params['vehicule'] ?? ''
-        ];
-        $sort = $params['sort'] ?? null;
-        $dateDebut = $params['dateDebut'] ?? null;
-        $dateFin = $params['dateFin'] ?? null;
-
-        $parkings = $this->parkingRepo->findAll($filters, $sort);
-
-        if ($dateDebut && $dateFin) {
-            foreach ($parkings as &$parking) {
-                $reserved = $this->reservationRepo->countConfirmed((int)$parking['id'], $dateDebut, $dateFin);
-                $parking['places_disponibles'] = max(0, $parking['nombre_places'] - $reserved);
-            }
-        } else {
-            foreach ($parkings as &$parking) {
-                $parking['places_disponibles'] = $parking['nombre_places'];
-            }
-        }
+        $useCase = new SearchParkings();
+        $result = $useCase->execute($params);
 
         return [
             'status' => 200,
             'data' => [
                 'success' => true,
-                'parkings' => $parkings,
-                'total' => count($parkings)
+                'parkings' => $result['parkings'],
+                'total' => $result['total']
             ]
         ];
     }
 
     public function detail(int $id): array {
-        $parking = $this->parkingRepo->findById($id);
-        
-        if (!$parking) {
-            return ['status' => 404, 'data' => ['success' => false, 'error' => 'Parking non trouvé']];
-        }
+        try {
+            $useCase = new GetParkingDetails();
+            $parking = $useCase->execute($id);
 
-        return ['status' => 200, 'data' => ['success' => true, 'parking' => $parking]];
+            return ['status' => 200, 'data' => ['success' => true, 'parking' => $parking]];
+        } catch (Exception $e) {
+            $code = $e->getCode() ?: 404;
+            return ['status' => $code, 'data' => ['success' => false, 'error' => $e->getMessage()]];
+        }
     }
 
     public function checkAvailability(array $data): array {
-        $parkingId = $data['parkingId'] ?? 0;
-        $dateDebut = $data['dateDebut'] ?? '';
-        $dateFin = $data['dateFin'] ?? '';
+        try {
+            $useCase = new CheckAvailability();
+            $result = $useCase->execute($data);
 
-        if (!$parkingId || !$dateDebut || !$dateFin) {
-            return ['status' => 400, 'data' => ['success' => false, 'error' => 'Données incomplètes']];
+            return [
+                'status' => 200,
+                'data' => array_merge(['success' => true], $result)
+            ];
+        } catch (Exception $e) {
+            $code = $e->getCode() ?: 400;
+            if ($code < 100 || $code > 599) $code = 400;
+
+            return [
+                'status' => $code,
+                'data' => ['success' => false, 'error' => $e->getMessage()]
+            ];
         }
-
-        $parking = $this->parkingRepo->findById((int)$parkingId);
-        if (!$parking) {
-            return ['status' => 404, 'data' => ['success' => false, 'error' => 'Parking non trouvé']];
-        }
-
-        $reserved = $this->reservationRepo->countConfirmed((int)$parkingId, $dateDebut, $dateFin);
-        $available = max(0, $parking['nombre_places'] - $reserved);
-
-        return [
-            'status' => 200,
-            'data' => [
-                'success' => true,
-                'available' => $available > 0,
-                'places_disponibles' => $available,
-                'parking' => $parking
-            ]
-        ];
     }
 
     public function listByOwner(?array $user): array {
-        if (!$user || $user['role'] !== 'owner') {
-            return ['status' => 401, 'data' => ['success' => false, 'error' => 'Non autorisé']];
-        }
+        if (!$user) return ['status' => 401, 'data' => ['success' => false, 'error' => 'Non autorisé']];
 
-        $parkings = $this->parkingRepo->findByOwner((int)$user['id']);
-        return ['status' => 200, 'data' => ['success' => true, 'parkings' => $parkings]];
+        try {
+            $useCase = new GetOwnerParkings();
+            $result = $useCase->execute($user);
+            
+            return [
+                'status' => 200,
+                'data' => array_merge(['success' => true], $result)
+            ];
+        } catch (Exception $e) {
+            $code = $e->getCode() ?: 401;
+            if ($code < 100 || $code > 599) $code = 401;
+            
+            return ['status' => $code, 'data' => ['success' => false, 'error' => $e->getMessage()]];
+        }
     }
 
     public function create(?array $user, array $data): array {
-        if (!$user || $user['role'] !== 'owner') {
-            return ['status' => 401, 'data' => ['success' => false, 'error' => 'Non autorisé']];
+        if (!$user) return ['status' => 401, 'data' => ['success' => false, 'error' => 'Non autorisé']];
+
+        try {
+            $useCase = new CreateParking();
+            $result = $useCase->execute($user, $data);
+            
+            return [
+                'status' => 201,
+                'data' => array_merge(['success' => true], $result)
+            ];
+        } catch (Exception $e) {
+            $code = $e->getCode() ?: 400;
+            if ($code < 100 || $code > 599) $code = 400;
+            
+            return ['status' => $code, 'data' => ['success' => false, 'error' => $e->getMessage()]];
         }
-
-        if (empty($data['nom']) || empty($data['adresse']) || empty($data['nombre_places'])) {
-            return ['status' => 400, 'data' => ['success' => false, 'error' => 'Données incomplètes']];
-        }
-
-        $id = $this->parkingRepo->create((int)$user['id'], $data);
-        $parking = $this->parkingRepo->findById($id);
-
-        return ['status' => 201, 'data' => ['success' => true, 'parking' => $parking]];
     }
 
     public function getStatistics(?array $user): array {
-        if (!$user || $user['role'] !== 'owner') {
-            return ['status' => 401, 'data' => ['success' => false, 'error' => 'Non autorisé']];
+        if (!$user) return ['status' => 401, 'data' => ['success' => false, 'error' => 'Non autorisé']];
+
+        try {
+            $useCase = new GetOwnerStatistics();
+            $result = $useCase->execute($user);
+            
+            return [
+                'status' => 200,
+                'data' => array_merge(['success' => true], $result)
+            ];
+        } catch (Exception $e) {
+            $code = $e->getCode() ?: 401;
+            if ($code < 100 || $code > 599) $code = 401;
+            
+            return ['status' => $code, 'data' => ['success' => false, 'error' => $e->getMessage()]];
         }
-
-        $revenue = $this->reservationRepo->getMonthlyRevenue((int)$user['id']);
-        $activeReservations = $this->reservationRepo->countActiveByOwner((int)$user['id']);
-        $activeStationnements = $this->reservationRepo->countActiveStationnementsByOwner((int)$user['id']);
-
-        return [
-            'status' => 200,
-            'data' => [
-                'success' => true,
-                'revenus_mensuels' => $revenue,
-                'reservations_en_cours' => $activeReservations,
-                'stationnements_actifs' => $activeStationnements
-            ]
-        ];
     }
 }
