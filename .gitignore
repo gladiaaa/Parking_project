@@ -2,6 +2,11 @@
 node_modules/
 frontend/node_modules/
 */node_modules/
+Backend/database/*.sqlite
+*.sqlite
+frontend/tailwind-test/
+
+
 
 # Build outputs
 build/

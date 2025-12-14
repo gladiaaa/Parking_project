@@ -41,3 +41,7 @@ SELECT id, 'Voiture' FROM parkings WHERE ville = 'Paris'
 UNION ALL SELECT id, 'Moto' FROM parkings WHERE ville = 'Paris'
 ON DUPLICATE KEY UPDATE type_vehicule=type_vehicule;
 
+
+
+
+

@@ -6,17 +6,17 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        primary: '#1a365d', // Bleu marine élégant et épuré
-        'primary-50': '#f0f4f8',
-        'primary-100': '#d9e2ec',
-        'primary-200': '#bcccdc',
-        'primary-300': '#9fb3c8',
-        'primary-400': '#829ab1',
-        'primary-500': '#627d98',
-        'primary-600': '#486581',
-        'primary-700': '#334e68',
-        'primary-800': '#243b53',
-        'primary-900': '#1a365d',
+        primary: '#E6375F', // Rose Yespark
+        'primary-50': '#fdf2f4',
+        'primary-100': '#fbe5e9',
+        'primary-200': '#f7ccd5',
+        'primary-300': '#f0a3b3',
+        'primary-400': '#e6375f', // Main color
+        'primary-500': '#d12f54',
+        'primary-600': '#ab1f40',
+        'primary-700': '#8a1632',
+        'primary-800': '#6b1126',
+        'primary-900': '#500c1c',
       },
       fontFamily: {
         sans: ['Inter', 'SF Pro Display', 'system-ui', '-apple-system', 'sans-serif'],

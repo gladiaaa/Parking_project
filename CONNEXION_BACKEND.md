@@ -285,3 +285,7 @@ export const login = async (email, password) => {
 
 **Guide pour connecter progressivement le frontend au backend réel**
 
+
+
+
+

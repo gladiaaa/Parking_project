@@ -24,12 +24,13 @@ const Reservation = () => {
 
   // Filtres avancés
   const [filters, setFilters] = useState({
-    prixMax: 10, // Prix max par défaut assez élevé pour voir tous les parkings
-    noteMin: 0, // Note min à 0 pour voir tous les parkings
+    prixMax: 10,
+    noteMin: 0,
     services: []
   });
 
-  const [showFilters, setShowFilters] = useState(false);
+  const [activeFilter, setActiveFilter] = useState(null);
+  const [viewMode, setViewMode] = useState('list'); // 'list' or 'map' for mobile
 
   // Charger les parkings au montage (toujours)
   useEffect(() => {
@@ -122,268 +123,215 @@ const Reservation = () => {
   const servicesDisponibles = ['Couvert', 'Gardé', 'Sécurisé', 'Vidéo-surveillance', 'Bornes électriques', 'Lavage auto', 'Accessible PMR'];
 
   return (
-    <>
-      <Header />
-      <div className="min-h-screen bg-white">
-        {/* Hero Section Ultra-Minimaliste */}
-        <div className="relative overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-br from-gray-50 via-white to-gray-50"></div>
-          <div className="relative max-w-6xl mx-auto px-6 py-20">
-            <div className="text-center mb-16">
-              <h1 className="text-6xl md:text-7xl font-extralight text-gray-900 tracking-tighter mb-6">
-                Trouvez votre place
-              </h1>
-              <p className="text-xl text-gray-400 font-light tracking-wide">
-                Réservez en quelques secondes
-              </p>
-            </div>
-
-            {/* Barre de recherche ultra-épurée */}
-            <div className="max-w-4xl mx-auto">
-              <div className="bg-white/80 backdrop-blur-xl rounded-2xl border border-gray-200/50 shadow-2xl p-1">
-                <div className="grid grid-cols-1 md:grid-cols-5 gap-1">
-                  <input
-                    type="text"
-                    placeholder="Où ?"
-                    value={searchParams.ville}
-                    onChange={(e) => setSearchParams({ ...searchParams, ville: e.target.value })}
-                    className="px-6 py-5 bg-transparent rounded-xl border-0 focus:outline-none focus:ring-0 text-gray-900 placeholder-gray-400 text-lg font-light"
-                  />
-                  <select
-                    value={searchParams.vehicule}
-                    onChange={(e) => setSearchParams({ ...searchParams, vehicule: e.target.value })}
-                    className="px-6 py-5 bg-transparent rounded-xl border-0 focus:outline-none focus:ring-0 text-gray-900 text-lg font-light appearance-none"
-                  >
-                    <option value="Voiture">🚗 Voiture</option>
-                    <option value="Moto">🏍️ Moto</option>
-                    <option value="Vélo">🚲 Vélo</option>
-                    <option value="Trottinette">🛴 Trottinette</option>
-                  </select>
-                  <input
-                    type="datetime-local"
-                    value={searchParams.dateDebut}
-                    onChange={(e) => setSearchParams({ ...searchParams, dateDebut: e.target.value })}
-                    className="px-6 py-5 bg-transparent rounded-xl border-0 focus:outline-none focus:ring-0 text-gray-900 text-lg font-light"
-                  />
-                  <input
-                    type="datetime-local"
-                    value={searchParams.dateFin}
-                    onChange={(e) => setSearchParams({ ...searchParams, dateFin: e.target.value })}
-                    className="px-6 py-5 bg-transparent rounded-xl border-0 focus:outline-none focus:ring-0 text-gray-900 text-lg font-light"
-                  />
-                  <button
-                    onClick={handleSearch}
-                    className="bg-gray-900 text-white py-5 rounded-xl font-light text-lg hover:bg-gray-800 transition-all duration-300 shadow-lg hover:shadow-xl"
-                  >
-                    Rechercher
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Contenu principal */}
-        <div className="max-w-7xl mx-auto px-6 py-12">
-          <div className="flex flex-col lg:flex-row gap-8">
-            {/* Sidebar Filtres - Ultra-minimaliste */}
-            <div className="lg:w-72 flex-shrink-0">
-              <div className="sticky top-28">
-                <button
-                  onClick={() => setShowFilters(!showFilters)}
-                  className="lg:hidden w-full mb-4 px-6 py-3 bg-gray-100 rounded-xl text-gray-900 font-light"
-                >
-                  {showFilters ? 'Masquer' : 'Filtres'}
-                </button>
-
-                <div className={`space-y-4 ${showFilters ? 'block' : 'hidden lg:block'}`}>
-                  {/* Tri */}
-                  <div className="bg-white rounded-2xl p-6 border border-gray-100">
-                    <h3 className="text-sm font-light text-gray-500 mb-4 uppercase tracking-wider">Trier</h3>
-                    <div className="space-y-2">
-                      {[
-                        { value: 'distance', label: 'Distance' },
-                        { value: 'prix_asc', label: 'Prix ↑' },
-                        { value: 'prix_desc', label: 'Prix ↓' },
-                        { value: 'note', label: 'Note' }
-                      ].map(option => (
-                        <button
-                          key={option.value}
-                          onClick={() => setSearchParams({ ...searchParams, sort: option.value })}
-                          className={`w-full px-4 py-2.5 rounded-lg text-left text-sm transition-all ${
-                            searchParams.sort === option.value
-                              ? 'bg-gray-900 text-white'
-                              : 'text-gray-600 hover:bg-gray-50'
-                          }`}
-                        >
-                          {option.label}
+    <div className="flex flex-col h-screen bg-white overflow-hidden">
+        <Header />
+        
+        <div className="flex flex-1 pt-[72px] overflow-hidden">
+            {/* COLONNE GAUCHE : LISTE + RECHERCHE */}
+            <div className={`w-full lg:w-[650px] flex flex-col h-full border-r border-gray-200 bg-white z-10 shadow-xl ${viewMode === 'map' ? 'hidden lg:flex' : 'flex'}`}>
+                
+                {/* BARRE DE RECHERCHE (Sticky) */}
+                <div className="p-4 border-b border-gray-200 bg-white shadow-sm z-20">
+                    <div className="flex gap-2 mb-3">
+                        <div className="relative flex-1">
+                            <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
+                                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                            </div>
+                            <input 
+                                type="text" 
+                                placeholder="Où cherchez-vous ?" 
+                                className="w-full pl-10 pr-4 py-3 bg-gray-100 border-none rounded-lg font-medium text-gray-900 focus:ring-2 focus:ring-black transition-all"
+                                value={searchParams.ville}
+                                onChange={(e) => setSearchParams({ ...searchParams, ville: e.target.value })}
+                            />
+                        </div>
+                        <button onClick={handleSearch} className="bg-primary text-white px-6 py-3 rounded-lg font-bold hover:bg-primary-600 transition-colors shadow-md">
+                            Rechercher
                         </button>
-                      ))}
                     </div>
-                  </div>
 
-                  {/* Prix */}
-                  <div className="bg-white rounded-2xl p-6 border border-gray-100">
-                    <h3 className="text-sm font-light text-gray-500 mb-4 uppercase tracking-wider">Prix max</h3>
-                    <input
-                      type="range"
-                      min="0"
-                      max="10"
-                      step="0.5"
-                      value={filters.prixMax}
-                      onChange={(e) => setFilters({ ...filters, prixMax: parseFloat(e.target.value) })}
-                      className="w-full"
-                    />
-                    <div className="text-center mt-3 text-2xl font-extralight text-gray-900">
-                      {filters.prixMax}€
-                    </div>
-                  </div>
+                    {/* FILTRES RAPIDES */}
+                    <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                         {/* Date Picker Button */}
+                         <div className="flex items-center gap-2 bg-white border border-gray-200 px-3 py-2 rounded-full text-sm font-medium text-gray-700 cursor-pointer hover:border-black transition-colors whitespace-nowrap group relative">
+                            <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                            <span>Dates</span>
+                            {/* Date Inputs Popup (Simplified for demo) */}
+                            <div className="absolute top-full left-0 mt-2 p-4 bg-white shadow-xl rounded-xl border border-gray-100 hidden group-hover:block min-w-[300px] z-50">
+                                <div className="space-y-3">
+                                    <div>
+                                        <label className="text-xs font-bold text-gray-400 uppercase">Début</label>
+                                        <input type="datetime-local" value={searchParams.dateDebut} onChange={(e) => setSearchParams({ ...searchParams, dateDebut: e.target.value })} className="w-full text-sm border-gray-200 rounded-md" />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-bold text-gray-400 uppercase">Fin</label>
+                                        <input type="datetime-local" value={searchParams.dateFin} onChange={(e) => setSearchParams({ ...searchParams, dateFin: e.target.value })} className="w-full text-sm border-gray-200 rounded-md" />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
 
-                  {/* Services */}
-                  <div className="bg-white rounded-2xl p-6 border border-gray-100">
-                    <h3 className="text-sm font-light text-gray-500 mb-4 uppercase tracking-wider">Services</h3>
-                    <div className="space-y-2">
-                      {servicesDisponibles.map(service => (
-                        <label key={service} className="flex items-center gap-3 cursor-pointer group">
-                          <input
-                            type="checkbox"
-                            checked={filters.services.includes(service)}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setFilters({ ...filters, services: [...filters.services, service] });
-                              } else {
-                                setFilters({ ...filters, services: filters.services.filter(s => s !== service) });
-                              }
-                            }}
-                            className="w-4 h-4 rounded border-gray-300 text-gray-900 focus:ring-gray-900"
-                          />
-                          <span className="text-sm text-gray-600 group-hover:text-gray-900 transition-colors">
-                            {service}
-                          </span>
-                        </label>
-                      ))}
+                        {/* Vehicle Type */}
+                        <select 
+                            value={searchParams.vehicule}
+                            onChange={(e) => setSearchParams({ ...searchParams, vehicule: e.target.value })}
+                            className="bg-white border border-gray-200 px-3 py-2 rounded-full text-sm font-medium text-gray-700 cursor-pointer hover:border-black transition-colors outline-none appearance-none"
+                        >
+                            <option value="Voiture">🚗 Voiture</option>
+                            <option value="Moto">🏍️ Moto</option>
+                            <option value="Vélo">🚲 Vélo</option>
+                        </select>
+
+                        {servicesDisponibles.slice(0, 3).map(service => (
+                            <button
+                                key={service}
+                                onClick={() => {
+                                    if (filters.services.includes(service)) {
+                                        setFilters({ ...filters, services: filters.services.filter(s => s !== service) });
+                                    } else {
+                                        setFilters({ ...filters, services: [...filters.services, service] });
+                                    }
+                                }}
+                                className={`px-3 py-2 rounded-full text-sm font-medium transition-colors whitespace-nowrap border ${
+                                    filters.services.includes(service)
+                                        ? 'bg-black text-white border-black'
+                                        : 'bg-white text-gray-700 border-gray-200 hover:border-black'
+                                }`}
+                            >
+                                {service}
+                            </button>
+                        ))}
                     </div>
-                  </div>
                 </div>
-              </div>
+
+                {/* LISTE DES RÉSULTATS (Scrollable) */}
+                <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
+                    <div className="flex justify-between items-center mb-2 px-1">
+                        <h2 className="text-xl font-bold text-gray-900">{filteredParkings.length} parkings disponibles</h2>
+                        <span className="text-sm text-gray-500 font-medium cursor-pointer hover:text-black">Trier par pertinence ▼</span>
+                    </div>
+
+                    {loading ? (
+                         <div className="flex justify-center py-20"><div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin"></div></div>
+                    ) : (
+                        filteredParkings.map(parking => (
+                            <ParkingCard
+                                key={parking.id}
+                                parking={parking}
+                                price={calculatePrice(parking)}
+                                onBook={() => handleBooking(parking)}
+                            />
+                        ))
+                    )}
+                    {filteredParkings.length === 0 && !loading && (
+                        <div className="text-center py-20 text-gray-500">Aucun parking trouvé dans cette zone.</div>
+                    )}
+                </div>
             </div>
 
-            {/* Liste des parkings */}
-            <div className="flex-1">
-              <div className="flex items-center justify-between mb-8">
-                <h2 className="text-2xl font-extralight text-gray-900">
-                  {filteredParkings.length} {filteredParkings.length > 1 ? 'parkings' : 'parking'}
-                </h2>
-              </div>
+            {/* COLONNE DROITE : CARTE (Full height) */}
+            <div className={`flex-1 bg-gray-200 relative ${viewMode === 'list' ? 'hidden lg:block' : 'block'}`}>
+                {/* Placeholder Carte Type Google Maps */}
+                <div className="absolute inset-0 bg-[#e5e7eb] flex items-center justify-center overflow-hidden">
+                    <div className="text-center opacity-30 select-none pointer-events-none">
+                        <div className="text-9xl mb-4">🗺️</div>
+                        <p className="text-3xl font-bold text-gray-400">Carte Interactive</p>
+                    </div>
+                    {/* Fake Map Pins */}
+                    {filteredParkings.map((p, i) => (
+                        <div key={p.id} className="absolute transform -translate-x-1/2 -translate-y-1/2 cursor-pointer group" style={{ top: `${30 + (i * 15) % 60}%`, left: `${30 + (i * 20) % 60}%` }}>
+                            <div className="bg-white px-3 py-1.5 rounded-lg shadow-lg font-bold text-sm border border-gray-200 group-hover:bg-black group-hover:text-white transition-colors">
+                                {calculatePrice(p)}€
+                            </div>
+                            <div className="w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[8px] border-t-white mx-auto group-hover:border-t-black"></div>
+                        </div>
+                    ))}
+                </div>
 
-              {loading ? (
-                <div className="flex items-center justify-center py-32">
-                  <div className="w-12 h-12 border-2 border-gray-200 border-t-gray-900 rounded-full animate-spin"></div>
-                </div>
-              ) : filteredParkings.length === 0 ? (
-                <div className="text-center py-32">
-                  <div className="text-7xl mb-6 font-extralight">🅿️</div>
-                  <h3 className="text-2xl font-extralight text-gray-900 mb-3">Aucun parking</h3>
-                  <p className="text-gray-400 font-light">Modifiez vos critères de recherche</p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {filteredParkings.map(parking => (
-                    <ParkingCard
-                      key={parking.id}
-                      parking={parking}
-                      price={calculatePrice(parking)}
-                      onBook={() => handleBooking(parking)}
-                    />
-                  ))}
-                </div>
-              )}
+                {/* Mobile Toggle Button */}
+                <button 
+                    className="lg:hidden absolute bottom-6 left-1/2 transform -translate-x-1/2 bg-black text-white px-6 py-3 rounded-full shadow-xl font-bold z-50 flex items-center gap-2"
+                    onClick={() => setViewMode(viewMode === 'list' ? 'map' : 'list')}
+                >
+                    {viewMode === 'list' ? '🗺️ Carte' : '📋 Liste'}
+                </button>
             </div>
-          </div>
         </div>
-      </div>
 
-      {/* Modal de réservation */}
-      {showBookingModal && selectedParking && (
-        <BookingModal
-          parking={selectedParking}
-          searchParams={searchParams}
-          price={calculatePrice(selectedParking)}
-          onClose={() => {
-            setShowBookingModal(false);
-            setSelectedParking(null);
-          }}
-          onSuccess={() => {
-            setShowBookingModal(false);
-            setSelectedParking(null);
-            navigate('/mes-reservations');
-          }}
-        />
-      )}
-      <Footer />
-    </>
+        {/* Modal de réservation */}
+        {showBookingModal && selectedParking && (
+            <BookingModal
+                parking={selectedParking}
+                searchParams={searchParams}
+                price={calculatePrice(selectedParking)}
+                onClose={() => {
+                    setShowBookingModal(false);
+                    setSelectedParking(null);
+                }}
+                onSuccess={() => {
+                    setShowBookingModal(false);
+                    setSelectedParking(null);
+                    navigate('/mes-reservations');
+                }}
+            />
+        )}
+    </div>
   );
 };
 
-// Composant ParkingCard ultra-minimaliste
+// --- COMPOSANTS ENFANTS ---
+
 const ParkingCard = ({ parking, price, onBook }) => {
-  return (
-    <div className="group bg-white rounded-2xl border border-gray-200 overflow-hidden hover:border-gray-900 transition-all duration-500 hover:shadow-2xl">
-      <div className="flex flex-col md:flex-row">
-        {/* Image */}
-        <div className="md:w-64 h-48 md:h-auto bg-gradient-to-br from-gray-100 to-gray-200 relative overflow-hidden">
-          <div className="absolute inset-0 flex items-center justify-center text-7xl font-extralight">
-            🅿️
-          </div>
-          <div className="absolute top-4 left-4 bg-white/90 backdrop-blur-sm px-3 py-1.5 rounded-full text-xs font-light text-gray-900">
-            {parking.places_disponibles} places
-          </div>
-          <div className="absolute top-4 right-4 bg-white/90 backdrop-blur-sm px-3 py-1.5 rounded-full text-xs font-light text-gray-900 flex items-center gap-1">
-            ⭐ {parking.note}
-          </div>
-        </div>
-
-        {/* Contenu */}
-        <div className="flex-1 p-8">
-          <div className="flex justify-between items-start mb-6">
-            <div>
-              <h3 className="text-3xl font-extralight text-gray-900 mb-2">{parking.nom}</h3>
-              <p className="text-gray-400 font-light text-sm mb-1">
-                📍 {parking.adresse}
-              </p>
-              <p className="text-gray-300 text-xs font-light">
-                {parking.distance}
-              </p>
+    return (
+        <div className="bg-white border border-gray-200 rounded-xl p-4 hover:shadow-lg transition-all duration-200 cursor-pointer group flex gap-4">
+            {/* Image */}
+            <div className="w-32 h-32 bg-gray-100 rounded-lg flex-shrink-0 relative overflow-hidden">
+                <div className="absolute inset-0 flex items-center justify-center text-4xl">🅿️</div>
+                {parking.note >= 4.5 && (
+                    <div className="absolute top-2 left-2 bg-primary text-white text-[10px] font-bold px-2 py-0.5 rounded-sm uppercase tracking-wide">
+                        Coup de cœur
+                    </div>
+                )}
             </div>
-            <div className="text-right">
-              <div className="text-4xl font-extralight text-gray-900 mb-1">{price}€</div>
-              <div className="text-xs text-gray-400 font-light">total</div>
+
+            {/* Content */}
+            <div className="flex-1 flex flex-col justify-between">
+                <div>
+                    <div className="flex justify-between items-start">
+                        <h3 className="font-bold text-lg text-gray-900 leading-tight mb-1">{parking.nom}</h3>
+                        <div className="flex items-center gap-1 bg-gray-50 px-1.5 py-0.5 rounded text-xs font-bold text-gray-900">
+                            <span>★</span> {parking.note}
+                        </div>
+                    </div>
+                    <p className="text-gray-500 text-sm mb-2 truncate">{parking.adresse}</p>
+                    
+                    {/* Tags */}
+                    <div className="flex flex-wrap gap-1 mb-2">
+                        <span className="text-[10px] font-medium bg-gray-100 text-gray-600 px-2 py-0.5 rounded">{parking.places_disponibles} places dispo</span>
+                        {parking.services.slice(0, 2).map(s => (
+                            <span key={s} className="text-[10px] font-medium bg-gray-100 text-gray-600 px-2 py-0.5 rounded">{s}</span>
+                        ))}
+                    </div>
+                </div>
+
+                <div className="flex items-end justify-between mt-2">
+                    <div>
+                        <span className="text-lg font-bold text-primary">{price}€</span>
+                        <span className="text-xs text-gray-500 ml-1">/ total</span>
+                    </div>
+                    <button 
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onBook();
+                        }}
+                        className="bg-white border border-gray-300 text-gray-900 px-4 py-2 rounded-lg text-sm font-bold hover:bg-black hover:text-white hover:border-black transition-all"
+                    >
+                        Réserver
+                    </button>
+                </div>
             </div>
-          </div>
-
-          {/* Services */}
-          <div className="flex flex-wrap gap-2 mb-6">
-            {parking.services.slice(0, 4).map(service => (
-              <span
-                key={service}
-                className="px-3 py-1 bg-gray-50 text-gray-600 rounded-lg text-xs font-light"
-              >
-                {service}
-              </span>
-            ))}
-          </div>
-
-          {/* Bouton */}
-          <button
-            onClick={onBook}
-            className="w-full bg-gray-900 text-white py-4 rounded-xl font-light hover:bg-gray-800 transition-all duration-300 shadow-lg hover:shadow-xl"
-          >
-            Réserver
-          </button>
         </div>
-      </div>
-    </div>
-  );
+    );
 };
 
 // Modal ultra-minimaliste

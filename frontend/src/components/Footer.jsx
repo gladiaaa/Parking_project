@@ -9,7 +9,7 @@ export default function Footer() {
           {/* Logo & Description */}
           <div className="md:col-span-2 space-y-6">
             <div className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-zenpark rounded-full"></div>
+              <div className="w-8 h-8 bg-primary rounded-full"></div>
               <span className="text-xl font-light text-gray-900">parkingpartagé</span>
             </div>
             <p className="text-gray-500 leading-relaxed max-w-md font-light">

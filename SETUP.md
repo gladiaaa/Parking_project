@@ -163,3 +163,7 @@ Chaque membre doit :
 
 **Tous les membres partagent le même schéma de base de données !**
 
+
+
+
+
