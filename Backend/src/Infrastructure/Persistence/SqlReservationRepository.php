@@ -1,73 +1,95 @@
 <?php
-declare(strict_types=1);
 
 namespace App\Infrastructure\Persistence;
 
-
-
-use App\Domain\Entity\parking;
-use App\Domain\Entity\User;
-use App\Domain\Repository\ParkingReservationRepository;
-use DateTimeImmutable;
+use App\Domain\Entity\Reservation;
+use App\Domain\Repository\ReservationRepository;
 use PDO;
 
-final class SqlReservationRepository implements ParkingReservationRepository
+final class SqlReservationRepository implements ReservationRepository
 {
-    public function save(Parking $parking): void
+    public function __construct(private PDO $db) {}
+
+    public function save(Reservation $reservation): Reservation
     {
-        // Extraction des valeurs pour la requête
-        $gps = $parking->getGps();
-        $tarif = $parking->getTarif();
-        // Conversion de l'objet DateTime en format SQL standard
-        $heureDebut = $parking->getHeureDebut()->format('Y-m-d H:i:s');
-        $heureFin = $parking->getHeureFin()->format('Y-m-d H:i:s');
+        if ($reservation->id() === null) {
+            $stmt = $this->db->prepare("
+                INSERT INTO reservations (user_id, parking_id, start_at, end_at, vehicle_type, amount, created_at)
+                VALUES (:user_id, :parking_id, :start_at, :end_at, :vehicle_type, :amount, :created_at)
+            ");
 
-        // --- CAS 1: Création (INSERT) ---
-        if ($parking->getId() === null) {
-            $sql = "INSERT INTO reservations (gps, tarif, heure_debut, heure_fin) 
-                    VALUES (:gps, :tarif, :h_deb, :h_fin)";
-
-            $stmt = $this->db->prepare($sql);
             $stmt->execute([
-                ':gps'    => $gps,
-                ':tarif'  => $tarif,
-                ':h_deb'  => $heureDebut,
-                ':h_fin'  => $heureFin,
+                ':user_id' => $reservation->userId(),
+                ':parking_id' => $reservation->parkingId(),
+                ':start_at' => $reservation->startAt()->format('Y-m-d H:i:s'),
+                ':end_at' => $reservation->endAt()->format('Y-m-d H:i:s'),
+                ':vehicle_type' => $reservation->vehicleType(),
+                ':amount' => $reservation->amount(),
+                ':created_at' => $reservation->createdAt()->format('Y-m-d H:i:s'),
             ]);
 
-            // Récupérer l'ID généré par la DB et l'assigner à l'Entité
-            $newId = (int)$this->db->lastInsertId();
-            $parking->setId($newId);
-
+            return $reservation->withId((int)$this->db->lastInsertId());
         }
-        // --- CAS 2: Mise à jour (UPDATE) ---
-        else {
-            $sql = "UPDATE reservations 
-                    SET gps = :gps, tarif = :tarif, heure_debut = :h_deb, heure_fin = :h_fin 
-                    WHERE id = :id";
 
-            $stmt = $this->db->prepare($sql);
-            $stmt->execute([
-                ':id'     => $parking->getId(),
-                ':gps'    => $gps,
-                ':tarif'  => $tarif,
-                ':h_deb'  => $heureDebut,
-                ':h_fin'  => $heureFin,
-            ]);
-        }
-    }
-    public function delete(Parking $reservation): void
-    {
-        // TODO: Implement delete() method.
+        // optional update later
+        return $reservation;
     }
 
-    public function getById(int $reservationId): ?parking
+    public function findByUserId(int $userId): array
     {
-        // TODO: Implement getById() method.
+        $stmt = $this->db->prepare("
+            SELECT *
+            FROM reservations
+            WHERE user_id = :uid
+            ORDER BY start_at DESC
+        ");
+        $stmt->execute([':uid' => $userId]);
+
+        return array_map([$this, 'hydrate'], $stmt->fetchAll(PDO::FETCH_ASSOC));
     }
 
-    public function isPlaceReserved(int $placeId, DateTimeImmutable $heureDebut, DateTimeImmutable $heureFin): bool
+    public function findByParkingId(int $parkingId): array
     {
-        // TODO: Implement isPlaceReserved() method.
+        $stmt = $this->db->prepare("
+            SELECT *
+            FROM reservations
+            WHERE parking_id = :pid
+            ORDER BY start_at DESC
+        ");
+        $stmt->execute([':pid' => $parkingId]);
+
+        return array_map([$this, 'hydrate'], $stmt->fetchAll(PDO::FETCH_ASSOC));
+    }
+
+    public function countOverlappingForParking(int $parkingId, \DateTimeImmutable $startAt, \DateTimeImmutable $endAt): int
+    {
+        $stmt = $this->db->prepare("
+            SELECT COUNT(*) as c
+            FROM reservations
+            WHERE parking_id = :pid
+              AND start_at < :end_at
+              AND end_at > :start_at
+        ");
+        $stmt->execute([
+            ':pid' => $parkingId,
+            ':start_at' => $startAt->format('Y-m-d H:i:s'),
+            ':end_at' => $endAt->format('Y-m-d H:i:s'),
+        ]);
+
+        return (int)($stmt->fetch(PDO::FETCH_ASSOC)['c'] ?? 0);
+    }
+
+    private function hydrate(array $row): Reservation
+    {
+        return new Reservation(
+            (int)$row['id'],
+            (int)$row['user_id'],
+            (int)$row['parking_id'],
+            new \DateTimeImmutable($row['start_at']),
+            new \DateTimeImmutable($row['end_at']),
+            new \DateTimeImmutable($row['created_at']),
+            (string)$row['vehicle_type'],
+            (float)$row['amount']
+        );
     }
 }

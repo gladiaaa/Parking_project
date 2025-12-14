@@ -25,22 +25,22 @@ final class SqlUserRepository implements UserRepository
             (bool)$r['two_factor_enabled'],
             (string)$r['two_factor_method'],
             $r['two_factor_last_code'] ?? null,
-            $r['two_factor_expires_at']
-                ? new \DateTimeImmutable($r['two_factor_expires_at'])
-                : null,
+            !empty($r['two_factor_expires_at']) ? new \DateTimeImmutable($r['two_factor_expires_at']) : null,
             $r['two_factor_phone'] ?? null,
             $r['two_factor_totp_secret'] ?? null,
         );
     }
 
-    public function findById(int $id): ?User {
+    public function findById(int $id): ?User
+    {
         $st = $this->pdo->prepare('SELECT * FROM users WHERE id = ?');
         $st->execute([$id]);
         $r = $st->fetch(PDO::FETCH_ASSOC);
         return $r ? $this->hydrate($r) : null;
     }
 
-    public function findByEmail(string $email): ?User {
+    public function findByEmail(string $email): ?User
+    {
         $st = $this->pdo->prepare('SELECT * FROM users WHERE email = ?');
         $st->execute([$email]);
         $r = $st->fetch(PDO::FETCH_ASSOC);
@@ -50,7 +50,7 @@ final class SqlUserRepository implements UserRepository
     public function create(
         string $email,
         string $passwordHash,
-        string $role = 'USER',
+        string $role = 'user',
         ?string $firstname = null,
         ?string $lastname = null
     ): User {

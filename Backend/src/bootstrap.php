@@ -16,6 +16,8 @@ $dotenv->load();
 // Imports
 // =======================================
 use App\Infrastructure\Persistence\SqlUserRepository;
+use App\Infrastructure\Persistence\SqlParkingRepository;
+use App\Infrastructure\Persistence\SqlReservationRepository;
 use App\Infrastructure\Security\JwtManager;
 use App\Infrastructure\Security\PasswordHasher;
 use App\Infrastructure\Http\Router;
@@ -23,7 +25,10 @@ use App\Infrastructure\Http\Router;
 use App\Controller\AuthController;
 use App\Controller\Auth2FAController;
 use App\Controller\MeController;
+use App\Controller\ReservationController;
 
+
+use App\UseCase\CreateReservation;
 use App\UseCase\Auth\LoginUser;
 use App\UseCase\Auth\RegisterUser;
 use App\UseCase\Auth\RefreshToken;
@@ -32,6 +37,7 @@ use App\UseCase\Auth\VerifyTwoFactor;
 use App\UseCase\Auth\Mailer;
 use App\UseCase\Auth\SmsSender;
 use App\UseCase\Auth\TotpVerifier;
+
 
 // =======================================
 // Config
@@ -74,6 +80,9 @@ $pdo = pdo();
 
 $userRepository = new SqlUserRepository($pdo);
 $passwordHasher = new PasswordHasher();
+$parkingRepository = new SqlParkingRepository($pdo);
+$reservationRepository = new SqlReservationRepository($pdo);
+
 
 $jwtManager = new JwtManager(
     $_ENV['JWT_SECRET'],
@@ -111,6 +120,11 @@ $registerUser = new RegisterUser($userRepository, $passwordHasher);
 $refreshToken = new RefreshToken($jwtManager, $userRepository);
 $startTwoFA = new StartTwoFactor($userRepository, $mailer, $smsSender);
 $verify2FA = new VerifyTwoFactor($userRepository, $jwtManager, $totpVerifier);
+$createReservation = new CreateReservation(
+    $parkingRepository,
+    $reservationRepository
+);
+
 
 // =======================================
 // Controllers
@@ -125,6 +139,7 @@ $authController = new AuthController(
     $jwtManager
 );
 $auth2FAController = new Auth2FAController($verify2FA, $jwtManager);
+$reservationController = new ReservationController($createReservation, $reservationRepository, $jwtManager);
 
 // =======================================
 // Router
@@ -133,12 +148,17 @@ $auth2FAController = new Auth2FAController($verify2FA, $jwtManager);
 $router = new Router();
 
 $router
+
     ->get('/health', fn() => json(['ok' => true, 'php' => PHP_VERSION]))
     ->get('/api/me', [$meController, 'me'])
+    ->get('/api/reservations/me', [$reservationController, 'myReservations'])
 
     ->post('/api/auth/login', [$authController, 'login'])
     ->post('/api/auth/register', [$authController, 'register'])
     ->post('/api/auth/refresh', [$authController, 'refresh'])
     ->post('/api/auth/logout', [$authController, 'logout'])
 
-    ->post('/api/auth/2fa/verify', [$auth2FAController, 'verify']);
+    ->post('/api/auth/2fa/verify', [$auth2FAController, 'verify'])
+
+    ->post('/api/reservations', [$reservationController, 'create']);
+// =======================================
