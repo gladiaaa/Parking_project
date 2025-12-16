@@ -11,38 +11,48 @@ use App\UseCase\CreateReservation;
 
 final class ReservationController
 {
-    public JwtManager $jwt;
+    public function jwt(): JwtManager
+    {
+        return $this->jwt;
+    }
 
     public function __construct(
-        private CreateReservation $createReservation,
-        private ReservationRepository $reservationRepository,
-        JwtManager $jwt
+        private readonly CreateReservation $createReservation,
+        private readonly ReservationRepository $reservationRepository,
+        private readonly JwtManager $jwt
     ) {
-        $this->jwt = $jwt;
+    }
+
+    private function requireUserId(): int
+    {
+        $payload = $this->jwt->readAccessFromCookie();
+
+        if (!$payload || ($payload['typ'] ?? '') !== 'access') {
+            Response::json(['error' => 'Unauthorized'], 401);
+            exit;
+        }
+
+        $userId = (int) ($payload['sub'] ?? 0);
+        if ($userId <= 0) {
+            Response::json(['error' => 'Unauthorized'], 401);
+            exit;
+        }
+
+        return $userId;
     }
 
     #[IsGranted('USER')]
     public function create(): void
     {
-        $payload = $this->jwt->readAccessFromCookie();
-        if (!$payload || ($payload['typ'] ?? '') !== 'access') {
-            Response::json(['error' => 'Unauthorized'], 401);
-            return;
-        }
-
-        $userId = (int)($payload['sub'] ?? 0);
-        if ($userId <= 0) {
-            Response::json(['error' => 'Unauthorized'], 401);
-            return;
-        }
+        $userId = $this->requireUserId();
 
         $data = json_decode(file_get_contents('php://input'), true) ?? [];
 
-        $parkingId = (int)($data['parking_id'] ?? 0);
-        $startAt = (string)($data['start_at'] ?? '');
-        $endAt = (string)($data['end_at'] ?? '');
-        $vehicleType = (string)($data['vehicle_type'] ?? '');
-        $amount = (float)($data['amount'] ?? -1);
+        $parkingId = (int) ($data['parking_id'] ?? 0);
+        $startAt = (string) ($data['start_at'] ?? '');
+        $endAt = (string) ($data['end_at'] ?? '');
+        $vehicleType = (string) ($data['vehicle_type'] ?? '');
+        $amount = (float) ($data['amount'] ?? -1);
 
         if ($parkingId <= 0 || $startAt === '' || $endAt === '' || $vehicleType === '' || $amount < 0) {
             Response::json(['error' => 'Missing fields'], 400);
@@ -70,6 +80,7 @@ final class ReservationController
                 'created_at' => $res->createdAt()->format(DATE_ATOM),
             ], 201);
         } catch (\Throwable $e) {
+            // En prod: évite de leak le message brut. Là tu peux garder temporairement si vous êtes en dev.
             Response::json(['error' => $e->getMessage()], 400);
         }
     }
@@ -77,17 +88,7 @@ final class ReservationController
     #[IsGranted('USER')]
     public function myReservations(): void
     {
-        $payload = $this->jwt->readAccessFromCookie();
-        if (!$payload || ($payload['typ'] ?? '') !== 'access') {
-            Response::json(['error' => 'Unauthorized'], 401);
-            return;
-        }
-
-        $userId = (int)($payload['sub'] ?? 0);
-        if ($userId <= 0) {
-            Response::json(['error' => 'Unauthorized'], 401);
-            return;
-        }
+        $userId = $this->requireUserId();
 
         try {
             $rows = $this->reservationRepository->findByUserId($userId);
@@ -102,7 +103,7 @@ final class ReservationController
                     'vehicle_type' => $r->vehicleType(),
                     'amount' => $r->amount(),
                     'created_at' => $r->createdAt()->format(DATE_ATOM),
-                ], $rows)
+                ], $rows),
             ], 200);
         } catch (\Throwable $e) {
             Response::json(['error' => $e->getMessage()], 400);

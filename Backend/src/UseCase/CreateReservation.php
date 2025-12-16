@@ -29,7 +29,7 @@ final class CreateReservation
             throw new \RuntimeException("Parking not found");
         }
 
-        $capacity = $parking->getNbPlaces(); // later rename to capacity()
+        $capacity = $parking->capacity();
 
         $overlapping = $this->reservationRepo->countOverlappingForParking($parkingId, $start, $end);
 

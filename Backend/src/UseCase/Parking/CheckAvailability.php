@@ -3,40 +3,46 @@ declare(strict_types=1);
 
 namespace App\UseCase\Parking;
 
-use App\Infrastructure\Repository\ParkingRepository;
-use App\Infrastructure\Repository\ReservationRepository;
-use Exception;
+use App\Domain\Repository\ParkingRepository;
+use App\Domain\Repository\ReservationRepository;
 
-class CheckAvailability {
-    private ParkingRepository $parkingRepo;
-    private ReservationRepository $reservationRepo;
+final class CheckAvailability
+{
+    public function __construct(
+        private readonly ParkingRepository $parkingRepo,
+        private readonly ReservationRepository $reservationRepo
+    ) {}
 
-    public function __construct() {
-        $this->parkingRepo = new ParkingRepository();
-        $this->reservationRepo = new ReservationRepository();
-    }
+    public function execute(array $data): array
+    {
+        $parkingId = (int)($data['parking_id'] ?? 0);
+        $startAt = (string)($data['start_at'] ?? '');
+        $endAt = (string)($data['end_at'] ?? '');
 
-    public function execute(array $data): array {
-        $parkingId = $data['parkingId'] ?? 0;
-        $dateDebut = $data['dateDebut'] ?? '';
-        $dateFin = $data['dateFin'] ?? '';
-
-        if (!$parkingId || !$dateDebut || !$dateFin) {
-            throw new Exception('Données incomplètes', 400);
+        if ($parkingId <= 0 || $startAt === '' || $endAt === '') {
+            throw new \RuntimeException('Missing fields');
         }
 
-        $parking = $this->parkingRepo->findById((int)$parkingId);
-        if (!$parking) {
-            throw new Exception('Parking non trouvé', 404);
+        $start = new \DateTimeImmutable($startAt);
+        $end = new \DateTimeImmutable($endAt);
+
+        $parking = $this->parkingRepo->findById($parkingId);
+        if ($parking === null) {
+            throw new \RuntimeException('Parking not found');
         }
 
-        $reserved = $this->reservationRepo->countConfirmed((int)$parkingId, $dateDebut, $dateFin);
-        $available = max(0, $parking['nombre_places'] - $reserved);
+        $capacity = $parking->capacity();
+        $overlapping = $this->reservationRepo->countOverlappingForParking($parkingId, $start, $end);
+        $remaining = max(0, $capacity - $overlapping);
 
         return [
-            'available' => $available > 0,
-            'places_disponibles' => $available,
-            'parking' => $parking
+            'parking_id' => $parkingId,
+            'capacity' => $capacity,
+            'overlapping' => $overlapping,
+            'remaining' => $remaining,
+            'available' => $remaining > 0,
+            'start_at' => $start->format(DATE_ATOM),
+            'end_at' => $end->format(DATE_ATOM),
         ];
     }
 }

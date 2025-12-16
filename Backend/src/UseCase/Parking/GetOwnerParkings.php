@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 namespace App\UseCase\Parking;
 
-use App\Infrastructure\Repository\ParkingRepository;
+use App\Domain\Repository\ParkingRepository;
 use Exception;
 
 class GetOwnerParkings {

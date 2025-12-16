@@ -9,6 +9,24 @@ use PDO;
 final class SqlParkingRepository implements ParkingRepository
 {
     public function __construct(private PDO $db) {}
+public function create(array $data): int
+{
+    $stmt = $this->db->prepare("
+        INSERT INTO parkings (latitude, longitude, capacity, hourly_rate, opening_time, closing_time)
+        VALUES (:lat, :lng, :cap, :rate, :open, :close)
+    ");
+
+    $stmt->execute([
+        ':lat' => (float)($data['latitude'] ?? 0),
+        ':lng' => (float)($data['longitude'] ?? 0),
+        ':cap' => (int)($data['capacity'] ?? 0),
+        ':rate' => (float)($data['hourly_rate'] ?? 0),
+        ':open' => (string)($data['opening_time'] ?? '00:00:00'),
+        ':close' => (string)($data['closing_time'] ?? '23:59:59'),
+    ]);
+
+    return (int)$this->db->lastInsertId();
+}
 
     public function findById(int $id): ?Parking
     {

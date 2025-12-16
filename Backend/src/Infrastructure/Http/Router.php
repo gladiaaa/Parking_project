@@ -23,7 +23,8 @@ final class Router
     public function map(string $method, string $path, $handler): self
     {
         $path = rtrim($path, '/');
-        if ($path === '') $path = '/';
+        if ($path === '')
+            $path = '/';
 
         $this->routes[$method][$path] = $handler;
         return $this;
@@ -32,7 +33,8 @@ final class Router
     public function dispatch(string $method, string $path)
     {
         $path = rtrim($path, '/');
-        if ($path === '') $path = '/';
+        if ($path === '')
+            $path = '/';
 
         $handler = $this->routes[$method][$path] ?? null;
 
@@ -52,13 +54,28 @@ final class Router
             foreach ($attributes as $attribute) {
                 $instance = $attribute->newInstance();
 
-                if (!property_exists($controller, 'jwt')) {
-                    Response::json(['error' => 'Controller missing JWT'], 500);
-                    exit;
+               
+                if (method_exists($controller, 'jwt')) {
+                    $jwt = $controller->jwt();
+                    $instance->assert($jwt);
+                    continue;
                 }
 
-                $instance->assert($controller->jwt);
+                
+                if (property_exists($controller, 'jwt')) {
+                    try {
+                        $instance->assert($controller->jwt);
+                        continue;
+                    } catch (\Throwable $e) {
+                        Response::json(['error' => 'Controller JWT is not accessible'], 500);
+                        exit;
+                    }
+                }
+
+                Response::json(['error' => 'Controller missing JWT'], 500);
+                exit;
             }
+
 
             return call_user_func($handler);
         }

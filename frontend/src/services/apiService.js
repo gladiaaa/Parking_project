@@ -1,30 +1,32 @@
-<<<<<<< HEAD
 // frontend/src/services/apiService.js
 const API_BASE_URL = "http://localhost:8001";
 
-async function handleResponse(response) {
-  let data = null;
+async function readJsonSafe(res) {
   try {
-    data = await response.json();
+    return await res.json();
   } catch {
-    // certains endpoints peuvent ne pas renvoyer de JSON
+    return null;
   }
+}
 
-  if (!response.ok) {
-    const message =
+async function handleResponse(res) {
+  const data = await readJsonSafe(res);
+
+  if (!res.ok) {
+    const msg =
       data?.error ||
       data?.message ||
-      `Erreur API (${response.status})`;
-    throw new Error(message);
+      `API error (${res.status})`;
+    throw new Error(msg);
   }
 
   return data;
 }
 
 /**
- * Helper interne :
- * - fait le fetch avec credentials: "include"
- * - sur 401, tente un refresh puis rejoue la requête une fois
+ * Fetch helper:
+ * - always sends cookies
+ * - on 401 tries refresh once, then retries request once
  */
 async function authFetch(path, options = {}, retry = true) {
   const res = await fetch(`${API_BASE_URL}${path}`, {
@@ -33,40 +35,17 @@ async function authFetch(path, options = {}, retry = true) {
   });
 
   if (res.status === 401 && retry) {
-    // tentative de refresh silencieux
-    const refreshed = await apiService.refresh();
-    if (!refreshed) {
-      return res; // token mort, on laisse la 401
-    }
-
-    // on rejoue la requête UNE seule fois
+    const ok = await apiService.refresh();
+    if (!ok) return res;
     return authFetch(path, options, false);
   }
 
   return res;
 }
 
-=======
-const API_BASE_URL = 'http://localhost:8001/api';
-
-const handleResponse = async (response) => {
-  const data = await response.json();
-  if (!response.ok) {
-    const error = (data && data.error) || response.statusText;
-    throw new Error(error);
-  }
-  return data;
-};
-
->>>>>>> origin/Rayane
 export const apiService = {
-  /**
-   * Connexion utilisateur :
-   * - POST /api/auth/login
-   * - puis /api/me via authFetch (token fraîchement posé)
-   */
+  // ---------- AUTH ----------
   async login(email, password) {
-<<<<<<< HEAD
     const res = await fetch(`${API_BASE_URL}/api/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -76,54 +55,11 @@ export const apiService = {
 
     const data = await handleResponse(res);
 
-    if (data.status === "2fa_required") {
-      throw new Error(
-        "Double authentification requise (2FA), pas encore gérée côté interface."
-      );
+    // Si ton back renvoie un statut 2FA, tu peux le gérer ici plus tard
+    if (data?.status === "2fa_required") {
+      return { status: "2fa_required" };
     }
 
-    const meRes = await authFetch("/api/me", {
-      method: "GET",
-    });
-
-    const me = await handleResponse(meRes);
-
-    return {
-      success: true,
-      user: {
-        id: me.id,
-        email: me.email,
-        firstname: me.firstname,
-        lastname: me.lastname,
-        role: me.role ? me.role.toLowerCase().trim() : "user",
-
-      },
-    };
-  },
-
-  /**
-   * Inscription :
-   * - POST /api/auth/register
-   * - puis login auto
-   */
-  async register(form) {
-    const res = await fetch(`${API_BASE_URL}/api/auth/register`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({
-        firstname: form.firstname,
-        lastname: form.lastname,
-        email: form.email,
-        password: form.password,
-        role: form.role === "owner" ? "OWNER" : "USER",
-      }),
-    });
-
-    const data = await handleResponse(res);
-
-    // le back pose déjà les cookies ici.
-    // maintenant on récupère /api/me comme dans login()
     const meRes = await authFetch("/api/me", { method: "GET" });
     const me = await handleResponse(meRes);
 
@@ -132,232 +68,112 @@ export const apiService = {
       user: {
         id: me.id,
         email: me.email,
-        role: me.role ? me.role.toLowerCase().trim() : "user",
-        firstname: me.firstname,
-        lastname: me.lastname,
+        firstname: me.firstname ?? null,
+        lastname: me.lastname ?? null,
+        role: me.role ? String(me.role).toLowerCase().trim() : "user",
       },
     };
-  }
-  ,
+  },
 
-  /**
-   * Récupère l'utilisateur courant :
-   * - GET /api/me
-   * - si 401 → tente un refresh → rejoue /api/me
-   * - si toujours 401 → retourne null
-   */
+  async register({ firstname, lastname, email, password, role }) {
+    const res = await fetch(`${API_BASE_URL}/api/auth/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        firstname,
+        lastname,
+        email,
+        password,
+        role: role === "owner" ? "OWNER" : "USER",
+      }),
+    });
+
+    await handleResponse(res);
+
+    const meRes = await authFetch("/api/me", { method: "GET" });
+    const me = await handleResponse(meRes);
+
+    return {
+      success: true,
+      user: {
+        id: me.id,
+        email: me.email,
+        firstname: me.firstname ?? null,
+        lastname: me.lastname ?? null,
+        role: me.role ? String(me.role).toLowerCase().trim() : "user",
+      },
+    };
+  },
+
   async getCurrentUser() {
     const res = await authFetch("/api/me", { method: "GET" });
-
-    if (res.status === 401) {
-      return null;
-    }
+    if (res.status === 401) return null;
 
     const me = await handleResponse(res);
-
     return {
       id: me.id,
       email: me.email,
       firstname: me.firstname ?? null,
       lastname: me.lastname ?? null,
-      role: me.role ? me.role.toLowerCase().trim() : "user",
+      role: me.role ? String(me.role).toLowerCase().trim() : "user",
     };
   },
 
-  /**
-   * Appelle /api/auth/refresh pour obtenir un nouveau ACCESS_TOKEN
-   * Retourne true si ça a marché, false sinon.
-   */
   async refresh() {
     try {
       const res = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
         method: "POST",
         credentials: "include",
       });
-
-      try {
-        await handleResponse(res);
-        return true;
-      } catch {
-        return false;
-      }
-
+      await handleResponse(res);
+      return true;
     } catch {
       return false;
-=======
-    const response = await fetch(`${API_BASE_URL}/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
-    });
-    return handleResponse(response);
-  },
-
-  /**
-   * Inscription utilisateur
-   */
-  async register(userData) {
-    const response = await fetch(`${API_BASE_URL}/auth/register`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(userData),
-    });
-    return handleResponse(response);
-  },
-
-  /**
-   * Rechercher des parkings avec disponibilité en temps réel
-   */
-  async searchParkings(params = {}) {
-    const query = new URLSearchParams();
-    if (params.ville) query.append('ville', params.ville);
-    if (params.vehicule) query.append('vehicule', params.vehicule);
-    if (params.dateDebut) query.append('dateDebut', params.dateDebut);
-    if (params.dateFin) query.append('dateFin', params.dateFin);
-    if (params.sort) query.append('sort', params.sort);
-
-    const response = await fetch(`${API_BASE_URL}/parkings?${query.toString()}`);
-    return handleResponse(response);
-  },
-
-  /**
-   * Récupérer les détails d'un parking
-   */
-  async getParkingDetails(id) {
-    const response = await fetch(`${API_BASE_URL}/parkings/${id}`);
-    return handleResponse(response);
-  },
-
-  /**
-   * Vérifier la disponibilité d'un parking pour une période
-   */
-  async checkAvailability(parkingId, dateDebut, dateFin) {
-    const response = await fetch(`${API_BASE_URL}/parkings/check-availability`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ parkingId, dateDebut, dateFin }),
-    });
-    return handleResponse(response);
-  },
-
-  /**
-   * Réserver un parking
-   */
-  async reserveParking(token, parkingId, reservationData) {
-    const response = await fetch(`${API_BASE_URL}/reservations`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify({
-        parkingId,
-        ...reservationData
-      }),
-    });
-    return handleResponse(response);
-  },
-
-  /**
-   * Récupérer les réservations de l'utilisateur
-   */
-  async getReservations(token) {
-    const response = await fetch(`${API_BASE_URL}/reservations`, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
-    });
-    return handleResponse(response);
-  },
-  
-  /**
-   * Annuler une réservation
-   */
-  async cancelReservation(token, reservationId) {
-      const response = await fetch(`${API_BASE_URL}/reservations/${reservationId}/cancel`, {
-          method: 'POST',
-           headers: {
-            'Authorization': `Bearer ${token}`
-          }
-      });
-      return handleResponse(response);
-  },
-
-  /**
-   * Récupérer les stationnements actifs (dérivé des réservations)
-   */
-  async getStationnements(token) {
-    try {
-        const data = await this.getReservations(token);
-        const now = new Date();
-        const active = (data.reservations || []).filter(r => {
-            const start = new Date(r.date_debut);
-            const end = new Date(r.date_fin);
-            return r.statut === 'confirmée' && start <= now && end >= now;
-        });
-        return { success: true, stationnements: active };
-    } catch (error) {
-        console.error("Erreur getStationnements:", error);
-        return { success: false, stationnements: [] };
->>>>>>> origin/Rayane
     }
   },
 
-  /**
-<<<<<<< HEAD
-   * Déconnexion : purge les cookies côté back
-   */
   async logout() {
     await fetch(`${API_BASE_URL}/api/auth/logout`, {
       method: "POST",
       credentials: "include",
     });
   },
+
+  // ---------- RESERVATIONS ----------
+  async createReservation({ parkingId, startAt, endAt, vehicleType, amount }) {
+    const res = await authFetch("/api/reservations", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        parking_id: parkingId,
+        start_at: startAt,
+        end_at: endAt,
+        vehicle_type: vehicleType,
+        amount,
+      }),
+    });
+    return handleResponse(res);
+  },
+
+  async getMyReservations() {
+    const res = await authFetch("/api/reservations/me", { method: "GET" });
+    return handleResponse(res);
+  },
+
+  // ---------- PARKINGS (à brancher selon tes routes réelles) ----------
+  async searchParkings(query = {}) {
+    const qs = new URLSearchParams(query).toString();
+    const res = await authFetch(`/api/parkings${qs ? `?${qs}` : ""}`, {
+      method: "GET",
+    });
+    return handleResponse(res);
+  },
+
+  async getParkingDetails(id) {
+    const res = await authFetch(`/api/parkings/${id}`, { method: "GET" });
+    return handleResponse(res);
+  },
 };
 
 export default apiService;
-=======
-   * --- OWNER METHODS ---
-   */
-  async getOwnerParkings(token) {
-    const response = await fetch(`${API_BASE_URL}/owner/parkings`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-    });
-    return handleResponse(response);
-  },
-
-  async addParking(token, parkingData) {
-    const response = await fetch(`${API_BASE_URL}/parkings`, {
-        method: 'POST',
-        headers: { 
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(parkingData)
-    });
-    return handleResponse(response);
-  },
-
-  async getMonthlyRevenue(token) {
-      const response = await fetch(`${API_BASE_URL}/owner/stats`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-      });
-      return handleResponse(response);
-  },
-
-  async getActiveReservations(token) {
-      const response = await fetch(`${API_BASE_URL}/owner/stats`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-      });
-      return handleResponse(response);
-  },
-
-  async getActiveStationnements(token) {
-      const response = await fetch(`${API_BASE_URL}/owner/stats`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-      });
-      return handleResponse(response);
-  }
-};
->>>>>>> origin/Rayane

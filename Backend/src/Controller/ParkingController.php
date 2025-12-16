@@ -3,118 +3,56 @@ declare(strict_types=1);
 
 namespace App\Controller;
 
-use App\UseCase\Parking\SearchParkings;
-use App\UseCase\Parking\CheckAvailability;
+use App\Infrastructure\Http\Response;
 use App\UseCase\Parking\GetParkingDetails;
-use App\UseCase\Parking\GetOwnerParkings;
-use App\UseCase\Parking\CreateParking;
-use App\UseCase\Parking\GetOwnerStatistics;
-use Exception;
+use App\UseCase\Parking\CheckAvailability;
 
-class ParkingController {
-    
-    // Note: Plus besoin d'injecter les repos ici car les UseCases s'en occupent
+final class ParkingController
+{
+    public function __construct(
+        private readonly GetParkingDetails $getParkingDetails,
+        private readonly CheckAvailability $checkAvailability
+    ) {}
 
-    public function list(array $params): array {
-        $useCase = new SearchParkings();
-        $result = $useCase->execute($params);
+    // GET /api/parkings/details?id=1
+    public function details(): void
+    {
+        $id = (int)($_GET['id'] ?? 0);
+        if ($id <= 0) {
+            Response::json(['success' => false, 'error' => 'Missing id'], 400);
+            return;
+        }
 
-        return [
-            'status' => 200,
-            'data' => [
-                'success' => true,
-                'parkings' => $result['parkings'],
-                'total' => $result['total']
-            ]
-        ];
-    }
-
-    public function detail(int $id): array {
         try {
-            $useCase = new GetParkingDetails();
-            $parking = $useCase->execute($id);
-
-            return ['status' => 200, 'data' => ['success' => true, 'parking' => $parking]];
-        } catch (Exception $e) {
-            $code = $e->getCode() ?: 404;
-            return ['status' => $code, 'data' => ['success' => false, 'error' => $e->getMessage()]];
+            $parking = $this->getParkingDetails->execute($id);
+            Response::json(['success' => true, 'parking' => $parking], 200);
+        } catch (\Throwable $e) {
+            Response::json(['success' => false, 'error' => $e->getMessage()], 404);
         }
     }
 
-    public function checkAvailability(array $data): array {
-        try {
-            $useCase = new CheckAvailability();
-            $result = $useCase->execute($data);
+    // GET /api/parkings/availability?id=1&start_at=...&end_at=...
+    public function availability(): void
+    {
+        $id = (int)($_GET['id'] ?? 0);
+        $startAt = (string)($_GET['start_at'] ?? '');
+        $endAt = (string)($_GET['end_at'] ?? '');
 
-            return [
-                'status' => 200,
-                'data' => array_merge(['success' => true], $result)
-            ];
-        } catch (Exception $e) {
-            $code = $e->getCode() ?: 400;
-            if ($code < 100 || $code > 599) $code = 400;
-
-            return [
-                'status' => $code,
-                'data' => ['success' => false, 'error' => $e->getMessage()]
-            ];
+        if ($id <= 0 || $startAt === '' || $endAt === '') {
+            Response::json(['success' => false, 'error' => 'Missing fields'], 400);
+            return;
         }
-    }
-
-    public function listByOwner(?array $user): array {
-        if (!$user) return ['status' => 401, 'data' => ['success' => false, 'error' => 'Non autorisé']];
 
         try {
-            $useCase = new GetOwnerParkings();
-            $result = $useCase->execute($user);
-            
-            return [
-                'status' => 200,
-                'data' => array_merge(['success' => true], $result)
-            ];
-        } catch (Exception $e) {
-            $code = $e->getCode() ?: 401;
-            if ($code < 100 || $code > 599) $code = 401;
-            
-            return ['status' => $code, 'data' => ['success' => false, 'error' => $e->getMessage()]];
-        }
-    }
+            $result = $this->checkAvailability->execute([
+                'parking_id' => $id,
+                'start_at' => $startAt,
+                'end_at' => $endAt,
+            ]);
 
-    public function create(?array $user, array $data): array {
-        if (!$user) return ['status' => 401, 'data' => ['success' => false, 'error' => 'Non autorisé']];
-
-        try {
-            $useCase = new CreateParking();
-            $result = $useCase->execute($user, $data);
-            
-            return [
-                'status' => 201,
-                'data' => array_merge(['success' => true], $result)
-            ];
-        } catch (Exception $e) {
-            $code = $e->getCode() ?: 400;
-            if ($code < 100 || $code > 599) $code = 400;
-            
-            return ['status' => $code, 'data' => ['success' => false, 'error' => $e->getMessage()]];
-        }
-    }
-
-    public function getStatistics(?array $user): array {
-        if (!$user) return ['status' => 401, 'data' => ['success' => false, 'error' => 'Non autorisé']];
-
-        try {
-            $useCase = new GetOwnerStatistics();
-            $result = $useCase->execute($user);
-            
-            return [
-                'status' => 200,
-                'data' => array_merge(['success' => true], $result)
-            ];
-        } catch (Exception $e) {
-            $code = $e->getCode() ?: 401;
-            if ($code < 100 || $code > 599) $code = 401;
-            
-            return ['status' => $code, 'data' => ['success' => false, 'error' => $e->getMessage()]];
+            Response::json(['success' => true] + $result, 200);
+        } catch (\Throwable $e) {
+            Response::json(['success' => false, 'error' => $e->getMessage()], 400);
         }
     }
 }
