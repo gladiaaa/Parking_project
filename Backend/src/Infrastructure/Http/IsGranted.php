@@ -19,15 +19,17 @@ final class IsGranted
             exit;
         }
 
-        $userRole = $payload['role'] ?? 'USER';
+        // ✅ Normalisation: évite OWNER vs owner, USER vs user, etc.
+        $userRole = strtoupper((string)($payload['role'] ?? 'USER'));
+        $needed   = strtoupper((string)$this->role);
 
         $ranks = [
-            'USER' => 1,
+            'USER'  => 1,
             'OWNER' => 2,
             'ADMIN' => 3,
         ];
 
-        if (($ranks[$userRole] ?? 0) < ($ranks[$this->role] ?? 99)) {
+        if (($ranks[$userRole] ?? 0) < ($ranks[$needed] ?? 99)) {
             Response::json(['error' => 'Forbidden'], 403);
             exit;
         }

@@ -19,4 +19,9 @@ interface StationnementRepository
     ): void;
 
     public function findLastByReservationId(int $reservationId): ?Stationnement;
+    /** @return array<int, array<string,mixed>> */
+    public function listActiveByParkingId(int $parkingId): array;
+    public function countActiveByParkingId(int $parkingId): int;
+
+
 }

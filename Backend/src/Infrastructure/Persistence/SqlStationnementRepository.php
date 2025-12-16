@@ -86,4 +86,38 @@ final class SqlStationnementRepository implements StationnementRepository
             new \DateTimeImmutable($row['created_at'])
         );
     }
+
+    public function listActiveByParkingId(int $parkingId): array
+{
+    $stmt = $this->db->prepare('
+        SELECT
+          s.id,
+          s.reservation_id,
+          s.entered_at,
+          s.exited_at,
+          s.billed_amount,
+          s.penalty_amount,
+          s.created_at
+        FROM stationnements s
+        JOIN reservations r ON r.id = s.reservation_id
+        WHERE r.parking_id = :parking_id
+          AND s.exited_at IS NULL
+        ORDER BY s.entered_at DESC
+    ');
+    $stmt->execute(['parking_id' => $parkingId]);
+    return $stmt->fetchAll(\PDO::FETCH_ASSOC);
+}
+public function countActiveByParkingId(int $parkingId): int
+{
+    $stmt = $this->db->prepare('
+        SELECT COUNT(*)
+        FROM stationnements s
+        JOIN reservations r ON r.id = s.reservation_id
+        WHERE r.parking_id = :parking_id
+          AND s.exited_at IS NULL
+    ');
+    $stmt->execute(['parking_id' => $parkingId]);
+    return (int)$stmt->fetchColumn();
+}
+
 }

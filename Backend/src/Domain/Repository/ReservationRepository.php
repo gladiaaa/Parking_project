@@ -21,4 +21,9 @@ interface ReservationRepository
         \DateTimeImmutable $startAt,
         \DateTimeImmutable $endAt
     ): int;
+    /** @return array<int, array<string,mixed>> */
+    public function listByParking(int $parkingId, ?string $from, ?string $to): array;
+
+    public function countOverlappingNotEntered(int $parkingId, string $startAt, string $endAt): int;
+
 }
