@@ -6,6 +6,8 @@ use App\Domain\Entity\Reservation;
 
 interface ReservationRepository
 {
+    public function findById(int $id): ?Reservation;
+
     public function save(Reservation $reservation): Reservation;
 
     /** @return Reservation[] */

@@ -8,7 +8,9 @@ use PDO;
 
 final class SqlReservationRepository implements ReservationRepository
 {
-    public function __construct(private PDO $db) {}
+    public function __construct(private PDO $db)
+    {
+    }
 
     public function save(Reservation $reservation): Reservation
     {
@@ -28,11 +30,18 @@ final class SqlReservationRepository implements ReservationRepository
                 ':created_at' => $reservation->createdAt()->format('Y-m-d H:i:s'),
             ]);
 
-            return $reservation->withId((int)$this->db->lastInsertId());
+            return $reservation->withId((int) $this->db->lastInsertId());
         }
 
         // optional update later
         return $reservation;
+    }
+    public function findById(int $id): ?Reservation
+    {
+        $stmt = $this->db->prepare("SELECT * FROM reservations WHERE id = :id");
+        $stmt->execute([':id' => $id]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $row ? $this->hydrate($row) : null;
     }
 
     public function findByUserId(int $userId): array
@@ -76,20 +85,20 @@ final class SqlReservationRepository implements ReservationRepository
             ':end_at' => $endAt->format('Y-m-d H:i:s'),
         ]);
 
-        return (int)($stmt->fetch(PDO::FETCH_ASSOC)['c'] ?? 0);
+        return (int) ($stmt->fetch(PDO::FETCH_ASSOC)['c'] ?? 0);
     }
 
     private function hydrate(array $row): Reservation
     {
         return new Reservation(
-            (int)$row['id'],
-            (int)$row['user_id'],
-            (int)$row['parking_id'],
+            (int) $row['id'],
+            (int) $row['user_id'],
+            (int) $row['parking_id'],
             new \DateTimeImmutable($row['start_at']),
             new \DateTimeImmutable($row['end_at']),
             new \DateTimeImmutable($row['created_at']),
-            (string)$row['vehicle_type'],
-            (float)$row['amount']
+            (string) $row['vehicle_type'],
+            (float) $row['amount']
         );
     }
 }

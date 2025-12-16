@@ -62,6 +62,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'OPTIONS') {
 use App\Infrastructure\Persistence\SqlUserRepository;
 use App\Infrastructure\Persistence\SqlParkingRepository;
 use App\Infrastructure\Persistence\SqlReservationRepository;
+use App\Infrastructure\Persistence\SqlStationnementRepository;
+
 use App\Infrastructure\Security\JwtManager;
 use App\Infrastructure\Security\PasswordHasher;
 use App\Infrastructure\Http\Router;
@@ -74,7 +76,12 @@ use App\Controller\ParkingController;
 
 use App\UseCase\Parking\GetParkingDetails;
 use App\UseCase\Parking\CheckAvailability;
+
+use App\UseCase\Billing\BillingCalculator;
 use App\UseCase\CreateReservation;
+use App\UseCase\Reservation\EnterReservation;
+use App\UseCase\Reservation\ExitReservation;
+use App\UseCase\Reservation\GetInvoiceHtml;
 
 use App\UseCase\Auth\LoginUser;
 use App\UseCase\Auth\RegisterUser;
@@ -92,8 +99,10 @@ $pdo = pdo();
 
 $userRepository = new SqlUserRepository($pdo);
 $passwordHasher = new PasswordHasher();
+
 $parkingRepository = new SqlParkingRepository($pdo);
 $reservationRepository = new SqlReservationRepository($pdo);
+$stationnementRepository = new SqlStationnementRepository($pdo);
 
 $getParkingDetails = new GetParkingDetails($parkingRepository);
 $checkAvailability = new CheckAvailability($parkingRepository, $reservationRepository);
@@ -130,7 +139,9 @@ $totpVerifier = new class implements TotpVerifier {
     }
 };
 
+// =======================================
 // Use cases
+// =======================================
 $loginUser = new LoginUser($userRepository, $passwordHasher);
 $registerUser = new RegisterUser($userRepository, $passwordHasher);
 $refreshToken = new RefreshToken($jwtManager, $userRepository);
@@ -139,26 +150,63 @@ $verify2FA = new VerifyTwoFactor($userRepository, $jwtManager, $totpVerifier);
 
 $createReservation = new CreateReservation($parkingRepository, $reservationRepository);
 
-// Controllers
-$meController = new MeController($jwtManager, $userRepository);
-$authController = new AuthController($loginUser, $refreshToken, $registerUser, $startTwoFA, $jwtManager);
-$auth2FAController = new Auth2FAController($verify2FA, $jwtManager);
-$reservationController = new ReservationController($createReservation, $reservationRepository, $jwtManager);
+// Stationnements + billing + invoice
+$billing = new BillingCalculator(); // slot=15, penaltyMultiplier=2 par défaut
+$enterReservation = new EnterReservation($reservationRepository, $stationnementRepository);
+$exitReservation = new ExitReservation($reservationRepository, $stationnementRepository, $parkingRepository, $billing);
+$getInvoiceHtml = new GetInvoiceHtml($reservationRepository, $stationnementRepository, $parkingRepository);
 
+// =======================================
+// Controllers
+// =======================================
+$meController = new MeController($jwtManager, $userRepository);
+
+$authController = new AuthController(
+    $loginUser,
+    $refreshToken,
+    $registerUser,
+    $startTwoFA,
+    $jwtManager
+);
+
+$auth2FAController = new Auth2FAController($verify2FA, $jwtManager);
+
+// IMPORTANT: ton ReservationController doit maintenant accepter ces dépendances en plus
+$reservationController = new ReservationController(
+    $createReservation,
+    $reservationRepository,
+    $jwtManager,
+    $enterReservation,
+    $exitReservation,
+    $getInvoiceHtml
+);
+
+// =======================================
 // Router
+// =======================================
 $router = new Router();
 
 $router
+    // Parking
     ->get('/api/parkings/details', [$parkingController, 'details'])
     ->get('/api/parkings/availability', [$parkingController, 'availability'])
-    ->get('/health', fn() => json(['ok' => true, 'php' => PHP_VERSION]))
-    ->get('/api/me', [$meController, 'me'])
-    ->get('/api/reservations/me', [$reservationController, 'myReservations'])
 
+    // Health
+    ->get('/health', fn() => json(['ok' => true, 'php' => PHP_VERSION]))
+
+    // Auth / me
+    ->get('/api/me', [$meController, 'me'])
     ->post('/api/auth/login', [$authController, 'login'])
     ->post('/api/auth/register', [$authController, 'register'])
     ->post('/api/auth/refresh', [$authController, 'refresh'])
     ->post('/api/auth/logout', [$authController, 'logout'])
-
     ->post('/api/auth/2fa/verify', [$auth2FAController, 'verify'])
-    ->post('/api/reservations', [$reservationController, 'create']);
+
+    // Reservations
+    ->get('/api/reservations/me', [$reservationController, 'myReservations'])
+    ->post('/api/reservations', [$reservationController, 'create'])
+
+    // Stationnements (nécessite Router paramétré)
+    ->post('/api/reservations/{id}/enter', [$reservationController, 'enter'])
+    ->post('/api/reservations/{id}/exit', [$reservationController, 'exit'])
+    ->get('/api/reservations/{id}/invoice', [$reservationController, 'invoice']);
