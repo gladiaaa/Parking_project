@@ -7,7 +7,7 @@ use App\Domain\Repository\ReservationRepository;
 use App\Infrastructure\Http\IsGranted;
 use App\Infrastructure\Http\Response;
 use App\Infrastructure\Security\JwtManager;
-use App\UseCase\CreateReservation;
+use App\UseCase\Reservation\CreateReservation;
 use App\UseCase\Reservation\EnterReservation;
 use App\UseCase\Reservation\ExitReservation;
 use App\UseCase\Reservation\GetInvoiceHtml;

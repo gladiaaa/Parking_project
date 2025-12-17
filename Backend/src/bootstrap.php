@@ -39,7 +39,7 @@ use App\UseCase\Parking\CreateParking;
 
 
 use App\UseCase\Billing\BillingCalculator;
-use App\UseCase\CreateReservation;
+use App\UseCase\Reservation\CreateReservation;
 use App\UseCase\Reservation\EnterReservation;
 use App\UseCase\Reservation\ExitReservation;
 use App\UseCase\Reservation\GetInvoiceHtml;

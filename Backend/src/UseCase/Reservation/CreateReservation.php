@@ -1,7 +1,8 @@
 <?php
 declare(strict_types=1);
 
-namespace App\UseCase;
+namespace App\UseCase\Reservation;
+
 
 use App\Domain\Entity\Reservation;
 use App\Domain\Repository\ParkingRepository;
