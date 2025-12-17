@@ -3,118 +3,88 @@ declare(strict_types=1);
 
 namespace App\Controller;
 
-use App\UseCase\Parking\SearchParkings;
-use App\UseCase\Parking\CheckAvailability;
+use App\Infrastructure\Http\Response;
+use App\Infrastructure\Http\IsGranted;
+use App\Infrastructure\Security\JwtManager;
 use App\UseCase\Parking\GetParkingDetails;
-use App\UseCase\Parking\GetOwnerParkings;
-use App\UseCase\Parking\CreateParking;
-use App\UseCase\Parking\GetOwnerStatistics;
-use Exception;
+use App\UseCase\Parking\CheckAvailability;
+use App\Domain\Repository\StationnementRepository;
 
-class ParkingController {
-    
-    // Note: Plus besoin d'injecter les repos ici car les UseCases s'en occupent
+final class ParkingController
+{
+    public function __construct(
+        private readonly JwtManager $jwt,
+        private readonly GetParkingDetails $getParkingDetails,
+        private readonly CheckAvailability $checkAvailability,
+        private readonly StationnementRepository $stationnementRepo
+    ) {}
 
-    public function list(array $params): array {
-        $useCase = new SearchParkings();
-        $result = $useCase->execute($params);
-
-        return [
-            'status' => 200,
-            'data' => [
-                'success' => true,
-                'parkings' => $result['parkings'],
-                'total' => $result['total']
-            ]
-        ];
+    public function jwt(): JwtManager
+    {
+        return $this->jwt;
     }
 
-    public function detail(int $id): array {
-        try {
-            $useCase = new GetParkingDetails();
-            $parking = $useCase->execute($id);
+    // GET /api/parkings/details?id=1
+    public function details(): void
+    {
+        $id = (int)($_GET['id'] ?? 0);
+        if ($id <= 0) {
+            Response::json(['success' => false, 'error' => 'Missing id'], 400);
+            return;
+        }
 
-            return ['status' => 200, 'data' => ['success' => true, 'parking' => $parking]];
-        } catch (Exception $e) {
-            $code = $e->getCode() ?: 404;
-            return ['status' => $code, 'data' => ['success' => false, 'error' => $e->getMessage()]];
+        try {
+            $parking = $this->getParkingDetails->execute($id);
+            Response::json(['success' => true, 'parking' => $parking], 200);
+        } catch (\Throwable $e) {
+            Response::json(['success' => false, 'error' => $e->getMessage()], 404);
         }
     }
 
-    public function checkAvailability(array $data): array {
+    // GET /api/parkings/availability?parking_id=1&start_at=...&end_at=...
+    #[IsGranted('USER')]
+    public function availability(): void
+    {
         try {
-            $useCase = new CheckAvailability();
-            $result = $useCase->execute($data);
-
-            return [
-                'status' => 200,
-                'data' => array_merge(['success' => true], $result)
+            $data = [
+                'parking_id' => $_GET['parking_id'] ?? null,
+                'start_at'   => $_GET['start_at'] ?? null,
+                'end_at'     => $_GET['end_at'] ?? null,
             ];
-        } catch (Exception $e) {
-            $code = $e->getCode() ?: 400;
-            if ($code < 100 || $code > 599) $code = 400;
 
-            return [
-                'status' => $code,
-                'data' => ['success' => false, 'error' => $e->getMessage()]
-            ];
+            $result = $this->checkAvailability->execute($data);
+            Response::json($result, 200);
+        } catch (\Throwable $e) {
+            Response::json(['success' => false, 'error' => $e->getMessage()], 400);
         }
     }
-
-    public function listByOwner(?array $user): array {
-        if (!$user) return ['status' => 401, 'data' => ['success' => false, 'error' => 'Non autorisé']];
-
-        try {
-            $useCase = new GetOwnerParkings();
-            $result = $useCase->execute($user);
-            
-            return [
-                'status' => 200,
-                'data' => array_merge(['success' => true], $result)
-            ];
-        } catch (Exception $e) {
-            $code = $e->getCode() ?: 401;
-            if ($code < 100 || $code > 599) $code = 401;
-            
-            return ['status' => $code, 'data' => ['success' => false, 'error' => $e->getMessage()]];
-        }
+    // GET /api/parkings/occupancy-now?parking_id=2
+public function occupancyNow(): void
+{
+    $parkingId = (int)($_GET['parking_id'] ?? 0);
+    if ($parkingId <= 0) {
+        Response::json(['success' => false, 'error' => 'Missing parking_id'], 400);
+        return;
     }
 
-    public function create(?array $user, array $data): array {
-        if (!$user) return ['status' => 401, 'data' => ['success' => false, 'error' => 'Non autorisé']];
+    try {
+        $parking = $this->getParkingDetails->execute($parkingId);
+        $capacity = (int)($parking['capacity'] ?? 0);
 
-        try {
-            $useCase = new CreateParking();
-            $result = $useCase->execute($user, $data);
-            
-            return [
-                'status' => 201,
-                'data' => array_merge(['success' => true], $result)
-            ];
-        } catch (Exception $e) {
-            $code = $e->getCode() ?: 400;
-            if ($code < 100 || $code > 599) $code = 400;
-            
-            return ['status' => $code, 'data' => ['success' => false, 'error' => $e->getMessage()]];
-        }
+        // IMPORTANT: countActiveByParkingId vient du repo stationnements
+        $occupied = $this->stationnementRepo->countActiveByParkingId($parkingId);
+        $remaining = max(0, $capacity - $occupied);
+
+        Response::json([
+            'parking_id' => $parkingId,
+            'capacity' => $capacity,
+            'occupied_now' => $occupied,
+            'remaining_now' => $remaining,
+            'available_now' => $remaining > 0,
+        ], 200);
+    } catch (\Throwable $e) {
+        Response::json(['success' => false, 'error' => $e->getMessage()], 404);
     }
+}
 
-    public function getStatistics(?array $user): array {
-        if (!$user) return ['status' => 401, 'data' => ['success' => false, 'error' => 'Non autorisé']];
-
-        try {
-            $useCase = new GetOwnerStatistics();
-            $result = $useCase->execute($user);
-            
-            return [
-                'status' => 200,
-                'data' => array_merge(['success' => true], $result)
-            ];
-        } catch (Exception $e) {
-            $code = $e->getCode() ?: 401;
-            if ($code < 100 || $code > 599) $code = 401;
-            
-            return ['status' => $code, 'data' => ['success' => false, 'error' => $e->getMessage()]];
-        }
-    }
 }

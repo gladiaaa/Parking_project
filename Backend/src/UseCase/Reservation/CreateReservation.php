@@ -3,82 +3,69 @@ declare(strict_types=1);
 
 namespace App\UseCase\Reservation;
 
-use App\Infrastructure\Repository\ReservationRepository;
-use App\Infrastructure\Repository\ParkingRepository;
-use DateTime;
-use Exception;
+use App\Domain\Entity\Reservation;
+use App\Domain\Repository\ParkingRepository;
+use App\Domain\Repository\ReservationRepository;
+use App\Domain\Repository\SubscriptionRepository;
+use App\UseCase\Parking\CalculateOccupancy;
 
-class CreateReservation {
-    private ReservationRepository $reservationRepo;
-    private ParkingRepository $parkingRepo;
+final class CreateReservation
+{
+    public function __construct(
+        private readonly ParkingRepository $parkingRepo,
+        private readonly ReservationRepository $reservationRepo,
+        private readonly CalculateOccupancy $occupancy,
+        private readonly SubscriptionRepository $subscriptions
+    ) {}
 
-    public function __construct() {
-        $this->reservationRepo = new ReservationRepository();
-        $this->parkingRepo = new ParkingRepository();
-    }
-
-    public function execute(array $data, array $user): array {
-        $parkingId = $data['parkingId'] ?? 0;
-        $dateDebut = $data['date_debut'] ?? '';
-        $dateFin = $data['date_fin'] ?? '';
-        $vehicule = $data['vehicule'] ?? '';
-        $immatriculation = $data['immatriculation'] ?? '';
-        $montant = $data['montant'] ?? 0;
-
-        // Validations
-        if (empty($dateDebut) || empty($dateFin)) {
-            throw new Exception('Dates manquantes', 400);
+    public function execute(
+        int $userId,
+        int $parkingId,
+        string $startAt,
+        string $endAt,
+        string $vehicleType,
+        float $amount
+    ): Reservation {
+        $parking = $this->parkingRepo->findById($parkingId);
+        if ($parking === null) {
+            throw new \RuntimeException('Parking not found');
         }
 
-        $now = new DateTime();
-        $start = new DateTime($dateDebut);
-        $end = new DateTime($dateFin);
-
+        $start = new \DateTimeImmutable($startAt);
+        $end   = new \DateTimeImmutable($endAt);
         if ($end <= $start) {
-            throw new Exception('La date de fin doit être après la date de début', 400);
-        }
-        
-        if ($start < $now) {
-             // On tolère une petite marge ou on bloque ? Pour l'instant on bloque si c'est vraiment dans le passé
-             // throw new Exception('La date de début ne peut pas être dans le passé', 400);
+            throw new \RuntimeException('Invalid time range');
         }
 
-        if ($this->reservationRepo->hasOverlapForUser((int)$user['id'], $dateDebut, $dateFin)) {
-            throw new Exception('Vous avez déjà une réservation sur cette période', 409);
+        $startStr = $start->format('Y-m-d H:i:s');
+        $endStr   = $end->format('Y-m-d H:i:s');
+
+        // ✅ anti-abus: un user ne peut pas avoir 2 réservations qui se chevauchent
+        if ($this->reservationRepo->existsOverlappingForUser($userId, $startStr, $endStr)) {
+            throw new \RuntimeException('User already has a reservation overlapping this time range');
         }
 
-        $parking = $this->parkingRepo->findById((int)$parkingId);
-        if (!$parking) {
-            throw new Exception('Parking non trouvé', 404);
+        // ✅ NEW: si l’utilisateur est couvert par un abonnement sur ce créneau, il n’a pas besoin de réserver
+        if ($this->subscriptions->coversUserForSlot($userId, $parkingId, $startStr, $endStr)) {
+            throw new \RuntimeException('Reservation not required: covered by an active subscription');
         }
 
-        $reserved = $this->reservationRepo->countConfirmed((int)$parkingId, $dateDebut, $dateFin);
+        $capacity = $parking->capacity();
 
-        if (($parking['nombre_places'] - $reserved) <= 0) {
-            throw new Exception('Plus de places disponibles pour cette période', 409);
+        $occupied = $this->occupancy->totalForAvailability($parkingId, $startStr, $endStr);
+        if ($occupied >= $capacity) {
+            throw new \RuntimeException('Parking full for this time slot');
         }
 
-        // Création
-        $id = $this->reservationRepo->create(
-            (int)$user['id'], 
-            (int)$parkingId, 
-            $dateDebut, 
-            $dateFin, 
-            $vehicule, 
-            $immatriculation, 
-            (float)$montant
+        $reservation = Reservation::create(
+            $userId,
+            $parkingId,
+            $start,
+            $end,
+            $vehicleType,
+            $amount
         );
 
-        return [
-            'success' => true, 
-            'message' => 'Réservation confirmée',
-            'reservation' => [
-                'id' => $id,
-                'montant' => $montant,
-                'date_debut' => $dateDebut,
-                'date_fin' => $dateFin,
-                'parking_id' => $parkingId
-            ]
-        ];
+        return $this->reservationRepo->save($reservation);
     }
 }
