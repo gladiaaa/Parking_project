@@ -8,6 +8,9 @@ use App\Infrastructure\Http\Router;
 use App\Infrastructure\Security\JwtManager;
 use App\Infrastructure\Security\PasswordHasher;
 
+use App\Infrastructure\Persistence\PersistenceFactory;
+
+
 use App\Infrastructure\Persistence\SqlUserRepository;
 use App\Infrastructure\Persistence\SqlParkingRepository;
 use App\Infrastructure\Persistence\SqlReservationRepository;
@@ -52,6 +55,9 @@ use App\UseCase\Owner\GetMonthlyRevenueForOwner;
 // =====================
 $dotenv = Dotenv::createImmutable(__DIR__ . '/..');
 $dotenv->load();
+
+define('APP_ROOT', realpath(__DIR__ . '/..'));        // => D:\...\Backend
+define('STORAGE_DIR', APP_ROOT . DIRECTORY_SEPARATOR . 'var' . DIRECTORY_SEPARATOR . 'storage');
 
 // =====================
 // Helpers
@@ -98,8 +104,11 @@ $db = pdo();
 
 $userRepository = new SqlUserRepository($db);
 $parkingRepository = new SqlParkingRepository($db);
-$reservationRepository = new SqlReservationRepository($db);
-$stationnementRepository = new SqlStationnementRepository($db);
+
+// Switchable (sql/json) WITHOUT touching UseCases
+
+$reservationRepository = PersistenceFactory::reservationRepository($db);
+$stationnementRepository = PersistenceFactory::stationnementRepository($db, $reservationRepository);
 
 $passwordHasher = new PasswordHasher();
 
