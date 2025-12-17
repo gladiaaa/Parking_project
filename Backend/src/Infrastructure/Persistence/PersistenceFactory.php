@@ -6,16 +6,19 @@ namespace App\Infrastructure\Persistence;
 use PDO;
 use App\Domain\Repository\ReservationRepository;
 use App\Domain\Repository\StationnementRepository;
+use App\Domain\Repository\SubscriptionRepository; // +++
 use App\Infrastructure\Persistence\SqlReservationRepository;
 use App\Infrastructure\Persistence\SqlStationnementRepository;
+use App\Infrastructure\Persistence\SqlSubscriptionRepository; // +++
 use App\Infrastructure\Persistence\Json\JsonReservationRepository;
 use App\Infrastructure\Persistence\Json\JsonStationnementRepository;
+use App\Infrastructure\Persistence\Json\JsonSubscriptionRepository; // +++
 
 final class PersistenceFactory
 {
     private static function driver(): string
     {
-        return strtolower((string)($_ENV['PERSISTENCE_DRIVER'] ?? 'sql'));
+        return strtolower((string) ($_ENV['PERSISTENCE_DRIVER'] ?? 'sql'));
     }
 
     private static function storagePath(string $filename): string
@@ -23,7 +26,15 @@ final class PersistenceFactory
         // STORAGE_DIR défini dans bootstrap.php
         return STORAGE_DIR . DIRECTORY_SEPARATOR . $filename;
     }
-
+    public static function subscriptionRepository(PDO $pdo): SubscriptionRepository
+    {
+        return match (self::driver()) {
+            'json' => new JsonSubscriptionRepository(
+                self::storagePath('subscriptions.json')
+            ),
+            default => new SqlSubscriptionRepository($pdo),
+        };
+    }
     public static function reservationRepository(PDO $pdo): ReservationRepository
     {
         return match (self::driver()) {

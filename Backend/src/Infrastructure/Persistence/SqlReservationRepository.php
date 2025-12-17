@@ -9,7 +9,9 @@ use PDO;
 
 final class SqlReservationRepository implements ReservationRepository
 {
-    public function __construct(private PDO $db) {}
+    public function __construct(private PDO $db)
+    {
+    }
 
     public function save(Reservation $reservation): Reservation
     {
@@ -29,7 +31,7 @@ final class SqlReservationRepository implements ReservationRepository
                 ':created_at' => $reservation->createdAt()->format('Y-m-d H:i:s'),
             ]);
 
-            return $reservation->withId((int)$this->db->lastInsertId());
+            return $reservation->withId((int) $this->db->lastInsertId());
         }
 
         // Si plus tard tu veux update, tu le feras ici.
@@ -87,7 +89,7 @@ final class SqlReservationRepository implements ReservationRepository
         ]);
 
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
-        return (int)($row['c'] ?? 0);
+        return (int) ($row['c'] ?? 0);
     }
 
     /**
@@ -124,19 +126,19 @@ final class SqlReservationRepository implements ReservationRepository
     private function hydrate(array $row): Reservation
     {
         return new Reservation(
-            (int)$row['id'],
-            (int)$row['user_id'],
-            (int)$row['parking_id'],
-            new \DateTimeImmutable((string)$row['start_at']),
-            new \DateTimeImmutable((string)$row['end_at']),
-            new \DateTimeImmutable((string)$row['created_at']),
-            (string)$row['vehicle_type'],
-            (float)$row['amount']
+            (int) $row['id'],
+            (int) $row['user_id'],
+            (int) $row['parking_id'],
+            new \DateTimeImmutable((string) $row['start_at']),
+            new \DateTimeImmutable((string) $row['end_at']),
+            new \DateTimeImmutable((string) $row['created_at']),
+            (string) $row['vehicle_type'],
+            (float) $row['amount']
         );
     }
     public function countOverlappingNotEntered(int $parkingId, string $startAt, string $endAt): int
-{
-    $stmt = $this->db->prepare('
+    {
+        $stmt = $this->db->prepare('
         SELECT COUNT(*)
         FROM reservations r
         LEFT JOIN stationnements s 
@@ -147,13 +149,32 @@ final class SqlReservationRepository implements ReservationRepository
           AND s.id IS NULL
     ');
 
-    $stmt->execute([
-        'parking_id' => $parkingId,
-        'start_at'   => $startAt,
-        'end_at'     => $endAt,
+        $stmt->execute([
+            'parking_id' => $parkingId,
+            'start_at' => $startAt,
+            'end_at' => $endAt,
+        ]);
+
+        return (int) $stmt->fetchColumn();
+    }
+    public function existsOverlappingForUser(int $userId, string $startAt, string $endAt): bool
+{
+    $sql = "SELECT 1
+            FROM reservations
+            WHERE user_id = :uid
+              AND start_at < :endAt
+              AND end_at > :startAt
+            LIMIT 1";
+
+    $st = $this->db->prepare($sql);
+    $st->execute([
+        ':uid' => $userId,
+        ':startAt' => $startAt,
+        ':endAt' => $endAt,
     ]);
 
-    return (int)$stmt->fetchColumn();
+    return (bool)$st->fetchColumn();
 }
+
 
 }

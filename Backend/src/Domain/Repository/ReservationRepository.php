@@ -25,5 +25,6 @@ interface ReservationRepository
     public function listByParking(int $parkingId, ?string $from, ?string $to): array;
 
     public function countOverlappingNotEntered(int $parkingId, string $startAt, string $endAt): int;
+    public function existsOverlappingForUser(int $userId, string $startAt, string $endAt): bool;
 
 }

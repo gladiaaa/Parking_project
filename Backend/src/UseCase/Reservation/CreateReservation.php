@@ -3,10 +3,10 @@ declare(strict_types=1);
 
 namespace App\UseCase\Reservation;
 
-
 use App\Domain\Entity\Reservation;
 use App\Domain\Repository\ParkingRepository;
 use App\Domain\Repository\ReservationRepository;
+use App\Domain\Repository\SubscriptionRepository;
 use App\UseCase\Parking\CalculateOccupancy;
 
 final class CreateReservation
@@ -14,7 +14,8 @@ final class CreateReservation
     public function __construct(
         private readonly ParkingRepository $parkingRepo,
         private readonly ReservationRepository $reservationRepo,
-        private readonly CalculateOccupancy $occupancy
+        private readonly CalculateOccupancy $occupancy,
+        private readonly SubscriptionRepository $subscriptions
     ) {}
 
     public function execute(
@@ -30,22 +31,28 @@ final class CreateReservation
             throw new \RuntimeException('Parking not found');
         }
 
-        // validation dates (sinon tu vas créer des réservations débiles)
         $start = new \DateTimeImmutable($startAt);
         $end   = new \DateTimeImmutable($endAt);
         if ($end <= $start) {
             throw new \RuntimeException('Invalid time range');
         }
 
+        $startStr = $start->format('Y-m-d H:i:s');
+        $endStr   = $end->format('Y-m-d H:i:s');
+
+        // ✅ anti-abus: un user ne peut pas avoir 2 réservations qui se chevauchent
+        if ($this->reservationRepo->existsOverlappingForUser($userId, $startStr, $endStr)) {
+            throw new \RuntimeException('User already has a reservation overlapping this time range');
+        }
+
+        // ✅ NEW: si l’utilisateur est couvert par un abonnement sur ce créneau, il n’a pas besoin de réserver
+        if ($this->subscriptions->coversUserForSlot($userId, $parkingId, $startStr, $endStr)) {
+            throw new \RuntimeException('Reservation not required: covered by an active subscription');
+        }
+
         $capacity = $parking->capacity();
 
-        // ✅ Occupation pour une nouvelle réservation = voitures déjà présentes + réservations du créneau pas encore entrées
-        $occupied = $this->occupancy->totalForAvailability(
-            $parkingId,
-            $start->format('Y-m-d H:i:s'),
-            $end->format('Y-m-d H:i:s')
-        );
-
+        $occupied = $this->occupancy->totalForAvailability($parkingId, $startStr, $endStr);
         if ($occupied >= $capacity) {
             throw new \RuntimeException('Parking full for this time slot');
         }

@@ -22,6 +22,10 @@ use App\Controller\MeController;
 use App\Controller\ReservationController;
 use App\Controller\ParkingController;
 use App\Controller\OwnerParkingController;
+use App\Controller\SubscriptionController;
+
+
+use App\UseCase\Subscription\CreateSubscription;
 
 use App\UseCase\Auth\LoginUser;
 use App\UseCase\Auth\RegisterUser;
@@ -39,6 +43,7 @@ use App\UseCase\Parking\CreateParking;
 
 
 use App\UseCase\Billing\BillingCalculator;
+
 use App\UseCase\Reservation\CreateReservation;
 use App\UseCase\Reservation\EnterReservation;
 use App\UseCase\Reservation\ExitReservation;
@@ -109,6 +114,7 @@ $parkingRepository = new SqlParkingRepository($db);
 
 $reservationRepository = PersistenceFactory::reservationRepository($db);
 $stationnementRepository = PersistenceFactory::stationnementRepository($db, $reservationRepository);
+$subscriptionRepository = PersistenceFactory::subscriptionRepository($db);
 
 $passwordHasher = new PasswordHasher();
 
@@ -154,12 +160,12 @@ $verify2FA = new VerifyTwoFactor($userRepository, $jwtManager, $totpVerifier);
 
 // Parking
 $getParkingDetails = new GetParkingDetails($parkingRepository);
-$occupancy = new CalculateOccupancy($stationnementRepository, $reservationRepository);
+$occupancy = new CalculateOccupancy($stationnementRepository, $reservationRepository, $subscriptionRepository);
 $checkAvailability = new CheckAvailability($parkingRepository, $occupancy);
 $createParking = new CreateParking($parkingRepository);
 
 // Reservations
-$createReservation = new CreateReservation($parkingRepository, $reservationRepository, $occupancy);
+$createReservation = new CreateReservation($parkingRepository, $reservationRepository, $occupancy, $subscriptionRepository);
 
 $billing = new BillingCalculator();
 $enterReservation = new EnterReservation($reservationRepository, $stationnementRepository);
@@ -212,6 +218,14 @@ $reservationController = new ReservationController(
     $getInvoiceHtml
 );
 
+$createSubscription = new CreateSubscription($subscriptionRepository);
+
+$subscriptionController = new SubscriptionController(
+    $jwtManager,
+    $createSubscription,
+    $subscriptionRepository
+);
+
 
 
 // =====================
@@ -230,6 +244,12 @@ $router
     ->post('/api/auth/logout', [$authController, 'logout'])
     ->post('/api/auth/2fa/verify', [$auth2FAController, 'verify'])
 
+
+    //Subscriptions
+    ->get('/api/subscriptions/me', [$subscriptionController, 'me'])
+    ->post('/api/subscriptions', [$subscriptionController, 'create'])
+
+    
     // Parking
     ->get('/api/parkings/details', [$parkingController, 'details'])
     ->get('/api/parkings/availability', [$parkingController, 'availability'])

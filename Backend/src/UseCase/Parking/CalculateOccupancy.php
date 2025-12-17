@@ -5,38 +5,36 @@ namespace App\UseCase\Parking;
 
 use App\Domain\Repository\ReservationRepository;
 use App\Domain\Repository\StationnementRepository;
+use App\Domain\Repository\SubscriptionRepository;
 
-/**
- * Calcule l'occupation d'un parking.
- *
- * - NOW: voitures actuellement présentes (stationnements actifs exited_at IS NULL)
- * - SLOT: occupation sur un créneau (réservations qui chevauchent le créneau),
- *         en excluant celles déjà entrées si tu veux éviter le double comptage.
- */
 final class CalculateOccupancy
 {
     public function __construct(
         private readonly StationnementRepository $stationnements,
-        private readonly ReservationRepository $reservations
+        private readonly ReservationRepository $reservations,
+        private readonly SubscriptionRepository $subscriptions
     ) {}
 
-    /** Nombre de voitures actuellement dans le parking (temps réel). */
+    /** Nombre de voitures actuellement dans le parking (temps réel) + abonnements actifs NOW. */
     public function now(int $parkingId): int
     {
-        return $this->stationnements->countActiveByParkingId($parkingId);
+        $at = (new \DateTimeImmutable('now'))->format('Y-m-d H:i:s');
+
+        return $this->stationnements->countActiveByParkingId($parkingId)
+            + $this->subscriptions->countActiveNow($parkingId, $at);
     }
 
     /**
      * Occupation sur un créneau.
-     * Stratégie: réservations qui chevauchent le créneau
-     * - en excluant celles déjà entrées (sinon tu doubles: réservation + stationnement).
+     * Stratégie:
+     * - réservations qui chevauchent le créneau, en excluant celles déjà entrées
+     * - + abonnements actifs sur le créneau (occupent une place même sans entrée)
      */
     public function forSlot(int $parkingId, string $startAt, string $endAt): int
     {
-        // réservations du créneau MAIS pas encore "entrées" (donc pas de stationnement actif)
-        return $this->reservations->countOverlappingNotEntered($parkingId, $startAt, $endAt);
+        return $this->reservations->countOverlappingNotEntered($parkingId, $startAt, $endAt)
+            + $this->subscriptions->countActiveForSlot($parkingId, $startAt, $endAt);
     }
-
 
     public function totalForAvailability(int $parkingId, string $startAt, string $endAt): int
     {

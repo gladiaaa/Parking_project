@@ -11,20 +11,21 @@ final class JsonReservationRepository implements ReservationRepository
     public function __construct(
         private readonly string $reservationsPath,
         private readonly ?string $stationnementsPath = null
-    ) {
-    }
+    ) {}
 
     /** @return array<int, array<string,mixed>> */
     private function readRows(): array
     {
-        if (!is_file($this->reservationsPath))
+        if (!is_file($this->reservationsPath)) {
             return [];
+        }
 
         $raw = file_get_contents($this->reservationsPath);
         $data = json_decode($raw ?: '[]', true);
 
         return is_array($data) ? $data : [];
     }
+
     private function debug(string $msg): void
     {
         if (($_ENV['APP_ENV'] ?? '') === 'test') {
@@ -33,7 +34,6 @@ final class JsonReservationRepository implements ReservationRepository
         error_log($msg);
     }
 
-    /** @param array<int, array<string,mixed>> $rows */
     /** @param array<int, array<string,mixed>> $rows */
     private function writeRows(array $rows): void
     {
@@ -57,8 +57,6 @@ final class JsonReservationRepository implements ReservationRepository
             $this->debug("[JSON] write error=" . var_export($err, true));
         }
     }
-
-
 
     /** @param array<string,mixed> $row */
     private function hydrate(array $row): Reservation
@@ -186,8 +184,9 @@ final class JsonReservationRepository implements ReservationRepository
 
         $count = 0;
         foreach ($this->readRows() as $r) {
-            if ((int) $r['parking_id'] !== $parkingId)
+            if ((int) $r['parking_id'] !== $parkingId) {
                 continue;
+            }
 
             // start_at < end_at AND end_at > start_at
             if ((string) $r['start_at'] < $end && (string) $r['end_at'] > $start) {
@@ -246,8 +245,9 @@ final class JsonReservationRepository implements ReservationRepository
                 foreach ($st as $s) {
                     if (($s['exited_at'] ?? null) === null) {
                         $rid = (int) ($s['reservation_id'] ?? 0);
-                        if ($rid > 0)
+                        if ($rid > 0) {
                             $activeReservationIds[$rid] = true;
+                        }
                     }
                 }
             }
@@ -271,10 +271,34 @@ final class JsonReservationRepository implements ReservationRepository
 
             // NOT (end_at <= start OR start_at >= end)
             $overlap = !($re <= $startAt || $rs >= $endAt);
-            if ($overlap)
+            if ($overlap) {
                 $count++;
+            }
         }
 
         return $count;
+    }
+
+    public function existsOverlappingForUser(int $userId, string $startAt, string $endAt): bool
+    {
+        foreach ($this->readRows() as $r) {
+            if ((int)($r['user_id'] ?? 0) !== $userId) {
+                continue;
+            }
+
+            $s = (string)($r['start_at'] ?? '');
+            $e = (string)($r['end_at'] ?? '');
+
+            if ($s === '' || $e === '') {
+                continue;
+            }
+
+            // overlap strict: start_at < endAt AND end_at > startAt
+            if ($s < $endAt && $e > $startAt) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
