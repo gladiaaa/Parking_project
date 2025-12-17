@@ -23,5 +23,7 @@ interface StationnementRepository
     public function listActiveByParkingId(int $parkingId): array;
     public function countActiveByParkingId(int $parkingId): int;
 
+/** @return array{count_exits:int, total_billed:float, total_penalty:float, total:float} */
+public function revenueForParking(string $from, string $to, int $parkingId): array;
 
 }

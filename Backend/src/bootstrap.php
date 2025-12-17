@@ -44,6 +44,8 @@ use App\UseCase\Reservation\GetInvoiceHtml;
 use App\UseCase\Owner\ListOwnerParkings;
 use App\UseCase\Owner\ListParkingReservationsForOwner;
 use App\UseCase\Owner\ListActiveStationnementsForOwner;
+use App\UseCase\Owner\GetMonthlyRevenueForOwner;
+
 
 // =====================
 // ENV
@@ -159,7 +161,7 @@ $getInvoiceHtml = new GetInvoiceHtml($reservationRepository, $stationnementRepos
 $listOwnerParkings = new ListOwnerParkings($parkingRepository);
 $listParkingReservationsForOwner = new ListParkingReservationsForOwner($parkingRepository, $reservationRepository);
 $listActiveStationnementsForOwner = new ListActiveStationnementsForOwner($parkingRepository, $stationnementRepository);
-
+$getMonthlyRevenueForOwner = new GetMonthlyRevenueForOwner($parkingRepository, $stationnementRepository);
 // =====================
 // Controllers
 // =====================
@@ -181,7 +183,8 @@ $ownerParkingController = new OwnerParkingController(
     $listOwnerParkings,
     $listParkingReservationsForOwner,
     $listActiveStationnementsForOwner,
-    $createParking
+    $createParking,
+    $getMonthlyRevenueForOwner
 );
 
 $parkingController = new ParkingController(
@@ -200,12 +203,7 @@ $reservationController = new ReservationController(
     $getInvoiceHtml
 );
 
-$ownerParkingController = new OwnerParkingController(
-    $jwtManager,
-    $listOwnerParkings,
-    $listParkingReservationsForOwner,
-    $listActiveStationnementsForOwner, $createParking
-);
+
 
 // =====================
 // Router
@@ -232,6 +230,7 @@ $router
     ->get('/api/owner/parkings', [$ownerParkingController, 'listMyParkings'])
     ->get('/api/owner/parkings/{id}/reservations', [$ownerParkingController, 'listParkingReservations'])
     ->get('/api/owner/parkings/{id}/stationnements/active', [$ownerParkingController, 'listActiveStationnements'])
+    ->get('/api/owner/parkings/{id}/revenue', [$ownerParkingController, 'monthlyRevenue'])
     ->post('/api/owner/parkings', [$ownerParkingController, 'createParking'])
 
     // Reservations

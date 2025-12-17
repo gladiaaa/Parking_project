@@ -1,5 +1,3 @@
-arborescence: 
-
 Directory structure:
 └── gladiaaa-parking_project/
     ├── README.md
@@ -30,11 +28,12 @@ Directory structure:
     │   │   │   ├── Entity/
     │   │   │   │   ├── parking.php
     │   │   │   │   ├── Reservation.php
+    │   │   │   │   ├── Stationnement.php
     │   │   │   │   └── User.php
     │   │   │   └── Repository/
     │   │   │       ├── ParkingRepository.php
-    │   │   │       ├── ParkingReservationRepository.php
     │   │   │       ├── ReservationRepository.php
+    │   │   │       ├── StationnementRepository.php
     │   │   │       └── UserRepository.php
     │   │   ├── Infrastructure/
     │   │   │   ├── Http/
@@ -44,13 +43,13 @@ Directory structure:
     │   │   │   ├── Persistence/
     │   │   │   │   ├── SqlParkingRepository.php
     │   │   │   │   ├── SqlReservationRepository.php
+    │   │   │   │   ├── SqlStationnementRepository.php
     │   │   │   │   └── SqlUserRepository.php
     │   │   │   └── Security/
     │   │   │       ├── JwtManager.php
     │   │   │       └── PasswordHasher.php
     │   │   └── UseCase/
     │   │       ├── CreateReservation.php
-    │   │       ├── ReserverParking.php
     │   │       ├── Auth/
     │   │       │   ├── ConfigureTwoFactorMethod.php
     │   │       │   ├── GetCurrentUser.php
@@ -62,6 +61,8 @@ Directory structure:
     │   │       │   ├── StartTwoFactor.php
     │   │       │   ├── TotpVerifier.php
     │   │       │   └── VerifyTwoFactor.php
+    │   │       ├── Billing/
+    │   │       │   └── BillingCalculator.php
     │   │       ├── Parking/
     │   │       │   ├── CheckAvailability.php
     │   │       │   ├── CreateParking.php
@@ -70,8 +71,9 @@ Directory structure:
     │   │       │   ├── GetParkingDetails.php
     │   │       │   └── SearchParkings.php
     │   │       └── Reservation/
-    │   │           ├── CancelReservation.php
-    │   │           ├── CreateReservation.php
+    │   │           ├── EnterReservation.php
+    │   │           ├── ExitReservation.php
+    │   │           ├── GetInvoiceHtml.php
     │   │           └── GetUserReservations.php
     │   └── tests/
     │       ├── Domain/
@@ -124,6 +126,8 @@ Directory structure:
         ├── 003_generate_password_hash.php
         ├── 004_add_api_token.sql
         └── sqlite_init.sql
+
+
 
 
 
@@ -1472,62 +1476,37 @@ error_log("BOOT OK");
 use Dotenv\Dotenv;
 
 // =======================================
-// Load ENV
+// Load ENV FIRST
 // =======================================
 $dotenv = Dotenv::createImmutable(__DIR__ . '/..');
 $dotenv->load();
 
 // =======================================
-// Imports
+// Config (define AFTER env is loaded)
 // =======================================
-use App\Infrastructure\Persistence\SqlUserRepository;
-use App\Infrastructure\Persistence\SqlParkingRepository;
-use App\Infrastructure\Persistence\SqlReservationRepository;
-use App\Infrastructure\Security\JwtManager;
-use App\Infrastructure\Security\PasswordHasher;
-use App\Infrastructure\Http\Router;
-
-use App\Controller\AuthController;
-use App\Controller\Auth2FAController;
-use App\Controller\MeController;
-use App\Controller\ReservationController;
-
-
-use App\UseCase\CreateReservation;
-use App\UseCase\Auth\LoginUser;
-use App\UseCase\Auth\RegisterUser;
-use App\UseCase\Auth\RefreshToken;
-use App\UseCase\Auth\StartTwoFactor;
-use App\UseCase\Auth\VerifyTwoFactor;
-use App\UseCase\Auth\Mailer;
-use App\UseCase\Auth\SmsSender;
-use App\UseCase\Auth\TotpVerifier;
-
-
-// =======================================
-// Config
-// =======================================
-
-function cors(): void {
-    header('Access-Control-Allow-Origin: ' . $_ENV['APP_ORIGIN']);
+function cors(): void
+{
+    header('Access-Control-Allow-Origin: ' . ($_ENV['APP_ORIGIN'] ?? '*'));
     header('Access-Control-Allow-Credentials: true');
     header('Access-Control-Allow-Headers: Content-Type, X-Requested-With');
     header('Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS');
     header('Content-Type: application/json; charset=utf-8');
 }
 
-function json($data, int $status = 200): void {
+function json($data, int $status = 200): void
+{
     http_response_code($status);
     echo json_encode($data, JSON_UNESCAPED_UNICODE);
 }
 
-function pdo(): PDO {
+function pdo(): PDO
+{
     static $pdo = null;
     if ($pdo) return $pdo;
 
     $dsn = 'mysql:host=' . $_ENV['DB_HOST'] .
-           ';dbname=' . $_ENV['DB_NAME'] .
-           ';charset=' . $_ENV['DB_CHARSET'];
+        ';dbname=' . $_ENV['DB_NAME'] .
+        ';charset=' . $_ENV['DB_CHARSET'];
 
     $pdo = new PDO($dsn, $_ENV['DB_USER'], $_ENV['DB_PASS'], [
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
@@ -1538,40 +1517,93 @@ function pdo(): PDO {
 }
 
 // =======================================
+// CORS + preflight (NOW env exists)
+// =======================================
+cors();
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'OPTIONS') {
+    http_response_code(204);
+    exit;
+}
+
+// =======================================
+// Imports
+// =======================================
+use App\Infrastructure\Persistence\SqlUserRepository;
+use App\Infrastructure\Persistence\SqlParkingRepository;
+use App\Infrastructure\Persistence\SqlReservationRepository;
+use App\Infrastructure\Persistence\SqlStationnementRepository;
+
+use App\Infrastructure\Security\JwtManager;
+use App\Infrastructure\Security\PasswordHasher;
+use App\Infrastructure\Http\Router;
+
+use App\Controller\AuthController;
+use App\Controller\Auth2FAController;
+use App\Controller\MeController;
+use App\Controller\ReservationController;
+use App\Controller\ParkingController;
+
+use App\UseCase\Parking\GetParkingDetails;
+use App\UseCase\Parking\CheckAvailability;
+
+use App\UseCase\Billing\BillingCalculator;
+use App\UseCase\CreateReservation;
+use App\UseCase\Reservation\EnterReservation;
+use App\UseCase\Reservation\ExitReservation;
+use App\UseCase\Reservation\GetInvoiceHtml;
+
+use App\UseCase\Auth\LoginUser;
+use App\UseCase\Auth\RegisterUser;
+use App\UseCase\Auth\RefreshToken;
+use App\UseCase\Auth\StartTwoFactor;
+use App\UseCase\Auth\VerifyTwoFactor;
+use App\UseCase\Auth\Mailer;
+use App\UseCase\Auth\SmsSender;
+use App\UseCase\Auth\TotpVerifier;
+
+// =======================================
 // Dependency Container
 // =======================================
-
 $pdo = pdo();
 
 $userRepository = new SqlUserRepository($pdo);
 $passwordHasher = new PasswordHasher();
+
 $parkingRepository = new SqlParkingRepository($pdo);
 $reservationRepository = new SqlReservationRepository($pdo);
+$stationnementRepository = new SqlStationnementRepository($pdo);
 
+$getParkingDetails = new GetParkingDetails($parkingRepository);
+$checkAvailability = new CheckAvailability($parkingRepository, $reservationRepository);
+
+$parkingController = new ParkingController($getParkingDetails, $checkAvailability);
 
 $jwtManager = new JwtManager(
     $_ENV['JWT_SECRET'],
-    (int)$_ENV['JWT_ACCESS_TTL'],
-    (int)$_ENV['JWT_REFRESH_TTL']
+    (int) $_ENV['JWT_ACCESS_TTL'],
+    (int) $_ENV['JWT_REFRESH_TTL']
 );
 
 // Fake mailer
 $mailer = new class implements Mailer {
-    public function sendTwoFactorCodeEmail(string $to, string $code): void {
+    public function sendTwoFactorCodeEmail(string $to, string $code): void
+    {
         error_log("[2FA EMAIL] $to -> code $code");
     }
 };
 
 // Fake SMS
 $smsSender = new class implements SmsSender {
-    public function sendTwoFactorSms(string $phone, string $code): void {
+    public function sendTwoFactorSms(string $phone, string $code): void
+    {
         error_log("[2FA SMS] $phone -> code $code");
     }
 };
 
 // Fake TOTP
 $totpVerifier = new class implements TotpVerifier {
-    public function verify(string $secret, string $code): bool {
+    public function verify(string $secret, string $code): bool
+    {
         return true;
     }
 };
@@ -1579,23 +1611,25 @@ $totpVerifier = new class implements TotpVerifier {
 // =======================================
 // Use cases
 // =======================================
-
 $loginUser = new LoginUser($userRepository, $passwordHasher);
 $registerUser = new RegisterUser($userRepository, $passwordHasher);
 $refreshToken = new RefreshToken($jwtManager, $userRepository);
 $startTwoFA = new StartTwoFactor($userRepository, $mailer, $smsSender);
 $verify2FA = new VerifyTwoFactor($userRepository, $jwtManager, $totpVerifier);
-$createReservation = new CreateReservation(
-    $parkingRepository,
-    $reservationRepository
-);
 
+$createReservation = new CreateReservation($parkingRepository, $reservationRepository);
+
+// Stationnements + billing + invoice
+$billing = new BillingCalculator(); // slot=15, penaltyMultiplier=2 par défaut
+$enterReservation = new EnterReservation($reservationRepository, $stationnementRepository);
+$exitReservation = new ExitReservation($reservationRepository, $stationnementRepository, $parkingRepository, $billing);
+$getInvoiceHtml = new GetInvoiceHtml($reservationRepository, $stationnementRepository, $parkingRepository);
 
 // =======================================
 // Controllers
 // =======================================
-
 $meController = new MeController($jwtManager, $userRepository);
+
 $authController = new AuthController(
     $loginUser,
     $refreshToken,
@@ -1603,30 +1637,49 @@ $authController = new AuthController(
     $startTwoFA,
     $jwtManager
 );
+
 $auth2FAController = new Auth2FAController($verify2FA, $jwtManager);
-$reservationController = new ReservationController($createReservation, $reservationRepository, $jwtManager);
+
+// IMPORTANT: ton ReservationController doit maintenant accepter ces dépendances en plus
+$reservationController = new ReservationController(
+    $createReservation,
+    $reservationRepository,
+    $jwtManager,
+    $enterReservation,
+    $exitReservation,
+    $getInvoiceHtml
+);
 
 // =======================================
 // Router
 // =======================================
-
 $router = new Router();
 
 $router
+    // Parking
+    ->get('/api/parkings/details', [$parkingController, 'details'])
+    ->get('/api/parkings/availability', [$parkingController, 'availability'])
 
+    // Health
     ->get('/health', fn() => json(['ok' => true, 'php' => PHP_VERSION]))
-    ->get('/api/me', [$meController, 'me'])
-    ->get('/api/reservations/me', [$reservationController, 'myReservations'])
 
+    // Auth / me
+    ->get('/api/me', [$meController, 'me'])
     ->post('/api/auth/login', [$authController, 'login'])
     ->post('/api/auth/register', [$authController, 'register'])
     ->post('/api/auth/refresh', [$authController, 'refresh'])
     ->post('/api/auth/logout', [$authController, 'logout'])
-
     ->post('/api/auth/2fa/verify', [$auth2FAController, 'verify'])
 
-    ->post('/api/reservations', [$reservationController, 'create']);
-// =======================================
+    // Reservations
+    ->get('/api/reservations/me', [$reservationController, 'myReservations'])
+    ->post('/api/reservations', [$reservationController, 'create'])
+
+    // Stationnements (nécessite Router paramétré)
+    ->post('/api/reservations/{id}/enter', [$reservationController, 'enter'])
+    ->post('/api/reservations/{id}/exit', [$reservationController, 'exit'])
+    ->get('/api/reservations/{id}/invoice', [$reservationController, 'invoice']);
+
 
 
 ================================================
@@ -1999,118 +2052,56 @@ declare(strict_types=1);
 
 namespace App\Controller;
 
-use App\UseCase\Parking\SearchParkings;
-use App\UseCase\Parking\CheckAvailability;
+use App\Infrastructure\Http\Response;
 use App\UseCase\Parking\GetParkingDetails;
-use App\UseCase\Parking\GetOwnerParkings;
-use App\UseCase\Parking\CreateParking;
-use App\UseCase\Parking\GetOwnerStatistics;
-use Exception;
+use App\UseCase\Parking\CheckAvailability;
 
-class ParkingController {
-    
-    // Note: Plus besoin d'injecter les repos ici car les UseCases s'en occupent
+final class ParkingController
+{
+    public function __construct(
+        private readonly GetParkingDetails $getParkingDetails,
+        private readonly CheckAvailability $checkAvailability
+    ) {}
 
-    public function list(array $params): array {
-        $useCase = new SearchParkings();
-        $result = $useCase->execute($params);
+    // GET /api/parkings/details?id=1
+    public function details(): void
+    {
+        $id = (int)($_GET['id'] ?? 0);
+        if ($id <= 0) {
+            Response::json(['success' => false, 'error' => 'Missing id'], 400);
+            return;
+        }
 
-        return [
-            'status' => 200,
-            'data' => [
-                'success' => true,
-                'parkings' => $result['parkings'],
-                'total' => $result['total']
-            ]
-        ];
-    }
-
-    public function detail(int $id): array {
         try {
-            $useCase = new GetParkingDetails();
-            $parking = $useCase->execute($id);
-
-            return ['status' => 200, 'data' => ['success' => true, 'parking' => $parking]];
-        } catch (Exception $e) {
-            $code = $e->getCode() ?: 404;
-            return ['status' => $code, 'data' => ['success' => false, 'error' => $e->getMessage()]];
+            $parking = $this->getParkingDetails->execute($id);
+            Response::json(['success' => true, 'parking' => $parking], 200);
+        } catch (\Throwable $e) {
+            Response::json(['success' => false, 'error' => $e->getMessage()], 404);
         }
     }
 
-    public function checkAvailability(array $data): array {
-        try {
-            $useCase = new CheckAvailability();
-            $result = $useCase->execute($data);
+    // GET /api/parkings/availability?id=1&start_at=...&end_at=...
+    public function availability(): void
+    {
+        $id = (int)($_GET['id'] ?? 0);
+        $startAt = (string)($_GET['start_at'] ?? '');
+        $endAt = (string)($_GET['end_at'] ?? '');
 
-            return [
-                'status' => 200,
-                'data' => array_merge(['success' => true], $result)
-            ];
-        } catch (Exception $e) {
-            $code = $e->getCode() ?: 400;
-            if ($code < 100 || $code > 599) $code = 400;
-
-            return [
-                'status' => $code,
-                'data' => ['success' => false, 'error' => $e->getMessage()]
-            ];
+        if ($id <= 0 || $startAt === '' || $endAt === '') {
+            Response::json(['success' => false, 'error' => 'Missing fields'], 400);
+            return;
         }
-    }
-
-    public function listByOwner(?array $user): array {
-        if (!$user) return ['status' => 401, 'data' => ['success' => false, 'error' => 'Non autorisé']];
 
         try {
-            $useCase = new GetOwnerParkings();
-            $result = $useCase->execute($user);
-            
-            return [
-                'status' => 200,
-                'data' => array_merge(['success' => true], $result)
-            ];
-        } catch (Exception $e) {
-            $code = $e->getCode() ?: 401;
-            if ($code < 100 || $code > 599) $code = 401;
-            
-            return ['status' => $code, 'data' => ['success' => false, 'error' => $e->getMessage()]];
-        }
-    }
+            $result = $this->checkAvailability->execute([
+                'parking_id' => $id,
+                'start_at' => $startAt,
+                'end_at' => $endAt,
+            ]);
 
-    public function create(?array $user, array $data): array {
-        if (!$user) return ['status' => 401, 'data' => ['success' => false, 'error' => 'Non autorisé']];
-
-        try {
-            $useCase = new CreateParking();
-            $result = $useCase->execute($user, $data);
-            
-            return [
-                'status' => 201,
-                'data' => array_merge(['success' => true], $result)
-            ];
-        } catch (Exception $e) {
-            $code = $e->getCode() ?: 400;
-            if ($code < 100 || $code > 599) $code = 400;
-            
-            return ['status' => $code, 'data' => ['success' => false, 'error' => $e->getMessage()]];
-        }
-    }
-
-    public function getStatistics(?array $user): array {
-        if (!$user) return ['status' => 401, 'data' => ['success' => false, 'error' => 'Non autorisé']];
-
-        try {
-            $useCase = new GetOwnerStatistics();
-            $result = $useCase->execute($user);
-            
-            return [
-                'status' => 200,
-                'data' => array_merge(['success' => true], $result)
-            ];
-        } catch (Exception $e) {
-            $code = $e->getCode() ?: 401;
-            if ($code < 100 || $code > 599) $code = 401;
-            
-            return ['status' => $code, 'data' => ['success' => false, 'error' => $e->getMessage()]];
+            Response::json(['success' => true] + $result, 200);
+        } catch (\Throwable $e) {
+            Response::json(['success' => false, 'error' => $e->getMessage()], 400);
         }
     }
 }
@@ -2130,33 +2121,49 @@ use App\Infrastructure\Http\IsGranted;
 use App\Infrastructure\Http\Response;
 use App\Infrastructure\Security\JwtManager;
 use App\UseCase\CreateReservation;
+use App\UseCase\Reservation\EnterReservation;
+use App\UseCase\Reservation\ExitReservation;
+use App\UseCase\Reservation\GetInvoiceHtml;
 
 final class ReservationController
 {
-    public JwtManager $jwt;
-
     public function __construct(
-        private CreateReservation $createReservation,
-        private ReservationRepository $reservationRepository,
-        JwtManager $jwt
-    ) {
-        $this->jwt = $jwt;
+        private readonly CreateReservation $createReservation,
+        private readonly ReservationRepository $reservationRepository,
+        private readonly JwtManager $jwt,
+        private readonly EnterReservation $enterReservation,
+        private readonly ExitReservation $exitReservation,
+        private readonly GetInvoiceHtml $getInvoiceHtml
+    ) {}
+
+    // Pour ton Router/IsGranted
+    public function jwt(): JwtManager
+    {
+        return $this->jwt;
     }
 
-    #[IsGranted('USER')]
-    public function create(): void
+    private function requireUserId(): int
     {
         $payload = $this->jwt->readAccessFromCookie();
+
         if (!$payload || ($payload['typ'] ?? '') !== 'access') {
             Response::json(['error' => 'Unauthorized'], 401);
-            return;
+            exit;
         }
 
         $userId = (int)($payload['sub'] ?? 0);
         if ($userId <= 0) {
             Response::json(['error' => 'Unauthorized'], 401);
-            return;
+            exit;
         }
+
+        return $userId;
+    }
+
+    #[IsGranted('USER')]
+    public function create(): void
+    {
+        $userId = $this->requireUserId();
 
         $data = json_decode(file_get_contents('php://input'), true) ?? [];
 
@@ -2199,17 +2206,7 @@ final class ReservationController
     #[IsGranted('USER')]
     public function myReservations(): void
     {
-        $payload = $this->jwt->readAccessFromCookie();
-        if (!$payload || ($payload['typ'] ?? '') !== 'access') {
-            Response::json(['error' => 'Unauthorized'], 401);
-            return;
-        }
-
-        $userId = (int)($payload['sub'] ?? 0);
-        if ($userId <= 0) {
-            Response::json(['error' => 'Unauthorized'], 401);
-            return;
-        }
+        $userId = $this->requireUserId();
 
         try {
             $rows = $this->reservationRepository->findByUserId($userId);
@@ -2224,10 +2221,57 @@ final class ReservationController
                     'vehicle_type' => $r->vehicleType(),
                     'amount' => $r->amount(),
                     'created_at' => $r->createdAt()->format(DATE_ATOM),
-                ], $rows)
+                ], $rows),
             ], 200);
         } catch (\Throwable $e) {
             Response::json(['error' => $e->getMessage()], 400);
+        }
+    }
+
+    #[IsGranted('USER')]
+    public function enter(int $id): void
+    {
+        $userId = $this->requireUserId();
+
+        try {
+            $st = $this->enterReservation->execute($userId, $id);
+
+            Response::json([
+                'success' => true,
+                'stationnement_id' => $st->id(),
+                'reservation_id' => $st->reservationId(),
+                'entered_at' => $st->enteredAt()->format(DATE_ATOM),
+            ], 200);
+        } catch (\Throwable $e) {
+            Response::json(['success' => false, 'error' => $e->getMessage()], 400);
+        }
+    }
+
+    #[IsGranted('USER')]
+    public function exit(int $id): void
+    {
+        $userId = $this->requireUserId();
+
+        try {
+            $result = $this->exitReservation->execute($userId, $id);
+            Response::json(['success' => true] + $result, 200);
+        } catch (\Throwable $e) {
+            Response::json(['success' => false, 'error' => $e->getMessage()], 400);
+        }
+    }
+
+    #[IsGranted('USER')]
+    public function invoice(int $id): void
+    {
+        $userId = $this->requireUserId();
+
+        try {
+            $html = $this->getInvoiceHtml->execute($userId, $id);
+            http_response_code(200);
+            header('Content-Type: text/html; charset=utf-8');
+            echo $html;
+        } catch (\Throwable $e) {
+            Response::json(['success' => false, 'error' => $e->getMessage()], 400);
         }
     }
 }
@@ -2238,6 +2282,7 @@ final class ReservationController
 FILE: Backend/src/Domain/Entity/parking.php
 ================================================
 <?php
+declare(strict_types=1);
 
 namespace App\Domain\Entity;
 
@@ -2246,19 +2291,25 @@ use DateTimeImmutable;
 final class Parking
 {
     private int $id;
-    private int $nbPlaces;
+    private int $capacity;
 
-    private string $gps; // OK en mode “rapide” (ex: "48.8566,2.3522")
+    // GPS stocké en string "lat,long" (rapide et suffisant pour l’instant)
+    private string $gps;
+
+    // Tarif horaire
     private float $tarif;
+
+    // Horaires
     private DateTimeImmutable $heureDebut;
     private DateTimeImmutable $heureFin;
 
+    // Relations (pour plus tard)
     private array $list_reservation;
     private array $list_stationnement;
 
     public function __construct(
         int $id,
-        int $nbPlaces,
+        int $capacity,
         string $gps,
         float $tarif,
         DateTimeImmutable $heureDebut,
@@ -2266,12 +2317,12 @@ final class Parking
         array $list_stationnement = [],
         array $list_reservation = []
     ) {
-        if ($nbPlaces < 0) {
-            throw new \InvalidArgumentException("nbPlaces must be >= 0");
+        if ($capacity < 0) {
+            throw new \InvalidArgumentException('capacity must be >= 0');
         }
 
         $this->id = $id;
-        $this->nbPlaces = $nbPlaces;
+        $this->capacity = $capacity;
         $this->gps = $gps;
         $this->tarif = $tarif;
         $this->heureDebut = $heureDebut;
@@ -2280,17 +2331,77 @@ final class Parking
         $this->list_stationnement = $list_stationnement;
     }
 
-    public function id(): int { return $this->id; }
-    public function getNbPlaces(): int { return $this->nbPlaces; }
+    /* ============================
+       Identité & capacité
+       ============================ */
 
-    public function getGps(): string { return $this->gps; }
-    public function getTarif(): float { return $this->tarif; }
+    public function id(): int
+    {
+        return $this->id;
+    }
 
-    public function getHeureDebut(): DateTimeImmutable { return $this->heureDebut; }
-    public function getHeureFin(): DateTimeImmutable { return $this->heureFin; }
+    public function capacity(): int
+    {
+        return $this->capacity;
+    }
 
-    public function getListReservation(): array { return $this->list_reservation; }
-    public function getListStationnement(): array { return $this->list_stationnement; }
+    /* ============================
+       Accès FR (legacy)
+       ============================ */
+
+    public function getGps(): string
+    {
+        return $this->gps;
+    }
+
+    public function getTarif(): float
+    {
+        return $this->tarif;
+    }
+
+    public function getHeureDebut(): DateTimeImmutable
+    {
+        return $this->heureDebut;
+    }
+
+    public function getHeureFin(): DateTimeImmutable
+    {
+        return $this->heureFin;
+    }
+
+    public function getListReservation(): array
+    {
+        return $this->list_reservation;
+    }
+
+    public function getListStationnement(): array
+    {
+        return $this->list_stationnement;
+    }
+
+    /* ============================
+       Aliases EN (API / UseCases)
+       ============================ */
+
+    public function gps(): string
+    {
+        return $this->getGps();
+    }
+
+    public function hourlyRate(): float
+    {
+        return $this->getTarif();
+    }
+
+    public function openingTime(): DateTimeImmutable
+    {
+        return $this->getHeureDebut();
+    }
+
+    public function closingTime(): DateTimeImmutable
+    {
+        return $this->getHeureFin();
+    }
 }
 
 
@@ -2366,6 +2477,55 @@ final class Reservation
             $this->vehicleType,
             $this->amount
         );
+    }
+}
+
+
+
+================================================
+FILE: Backend/src/Domain/Entity/Stationnement.php
+================================================
+<?php
+declare(strict_types=1);
+
+namespace App\Domain\Entity;
+
+final class Stationnement
+{
+    public function __construct(
+        private ?int $id,
+        private int $reservationId,
+        private \DateTimeImmutable $enteredAt,
+        private ?\DateTimeImmutable $exitedAt,
+        private ?float $billedAmount,
+        private ?float $penaltyAmount,
+        private \DateTimeImmutable $createdAt
+    ) {}
+
+    public static function enter(int $reservationId, \DateTimeImmutable $now): self
+    {
+        return new self(
+            null,
+            $reservationId,
+            $now,
+            null,
+            null,
+            null,
+            new \DateTimeImmutable('now')
+        );
+    }
+
+    public function id(): ?int { return $this->id; }
+    public function reservationId(): int { return $this->reservationId; }
+    public function enteredAt(): \DateTimeImmutable { return $this->enteredAt; }
+    public function exitedAt(): ?\DateTimeImmutable { return $this->exitedAt; }
+    public function billedAmount(): ?float { return $this->billedAmount; }
+    public function penaltyAmount(): ?float { return $this->penaltyAmount; }
+    public function createdAt(): \DateTimeImmutable { return $this->createdAt; }
+
+    public function withId(int $id): self
+    {
+        return new self($id, $this->reservationId, $this->enteredAt, $this->exitedAt, $this->billedAmount, $this->penaltyAmount, $this->createdAt);
     }
 }
 
@@ -2552,36 +2712,11 @@ use App\Domain\Entity\Parking;
 
 interface ParkingRepository
 {
+    public function create(array $data): int;
+
     public function findById(int $id): ?Parking;
 }
 
-
-
-================================================
-FILE: Backend/src/Domain/Repository/ParkingReservationRepository.php
-================================================
-<?php
-declare(strict_types=1);
-
-namespace App\Domain\Repository;
-
-
-use App\Domain\Entity\Parking; // Parking equivaut à réservation c'est juste mal nommé
-use DateTimeImmutable;
-
-/**
- * Interface définissant les contrats pour l'accès aux données des Réservations.
- */
-interface ParkingReservationRepository
-{
-
-    public function save(parking $reservation): void;
-
-    public function getById(int $reservationId): ?parking;
-    public function delete(parking $reservation): void;
-
-    public function isPlaceReserved(int $placeId, DateTimeImmutable $heureDebut, DateTimeImmutable $heureFin): bool;
-}
 
 
 ================================================
@@ -2595,6 +2730,8 @@ use App\Domain\Entity\Reservation;
 
 interface ReservationRepository
 {
+    public function findById(int $id): ?Reservation;
+
     public function save(Reservation $reservation): Reservation;
 
     /** @return Reservation[] */
@@ -2608,6 +2745,34 @@ interface ReservationRepository
         \DateTimeImmutable $startAt,
         \DateTimeImmutable $endAt
     ): int;
+}
+
+
+
+================================================
+FILE: Backend/src/Domain/Repository/StationnementRepository.php
+================================================
+<?php
+declare(strict_types=1);
+
+namespace App\Domain\Repository;
+
+use App\Domain\Entity\Stationnement;
+
+interface StationnementRepository
+{
+    public function save(Stationnement $s): Stationnement;
+
+    public function findActiveByReservationId(int $reservationId): ?Stationnement;
+
+    public function close(
+        int $stationnementId,
+        \DateTimeImmutable $exitedAt,
+        float $billedAmount,
+        float $penaltyAmount
+    ): void;
+
+    public function findLastByReservationId(int $reservationId): ?Stationnement;
 }
 
 
@@ -2705,7 +2870,6 @@ final class Response
 FILE: Backend/src/Infrastructure/Http/Router.php
 ================================================
 <?php
-
 declare(strict_types=1);
 
 namespace App\Infrastructure\Http;
@@ -2714,67 +2878,141 @@ use ReflectionMethod;
 
 final class Router
 {
+    /** @var array<string, array<int, array{path:string, handler:mixed, regex:?string, vars:array<int,string>}>> */
     private array $routes = [];
 
-    public function get(string $path, $handler): self
-    {
-        return $this->map('GET', $path, $handler);
-    }
-
-    public function post(string $path, $handler): self
-    {
-        return $this->map('POST', $path, $handler);
-    }
+    public function get(string $path, $handler): self { return $this->map('GET', $path, $handler); }
+    public function post(string $path, $handler): self { return $this->map('POST', $path, $handler); }
 
     public function map(string $method, string $path, $handler): self
     {
         $path = rtrim($path, '/');
         if ($path === '') $path = '/';
 
-        $this->routes[$method][$path] = $handler;
+        [$regex, $vars] = $this->compilePath($path);
+
+        $this->routes[$method][] = [
+            'path' => $path,
+            'handler' => $handler,
+            'regex' => $regex,
+            'vars' => $vars,
+        ];
+
         return $this;
     }
 
-    public function dispatch(string $method, string $path)
+public function dispatch(string $method, string $path): void
+{
+    $path = rtrim($path, '/');
+    if ($path === '') $path = '/';
+
+    [$handler, $params] = $this->match($method, $path);
+
+    if (!$handler) {
+        Response::json(['error' => 'Not found'], 404);
+        return;
+    }
+
+    if (is_array($handler) && is_object($handler[0])) {
+        $controller = $handler[0];
+        $methodName = $handler[1];
+
+        $this->applyGuards($controller, $methodName);
+
+        $this->call($handler, $params);
+        return;
+    }
+
+    if (is_array($handler) && is_string($handler[0])) {
+        $obj = new $handler[0]();
+        $this->call([$obj, $handler[1]], $params);
+        return;
+    }
+
+    $this->call($handler, $params);
+}
+
+
+    private function match(string $method, string $path): array
     {
-        $path = rtrim($path, '/');
-        if ($path === '') $path = '/';
+        $routes = $this->routes[$method] ?? [];
 
-        $handler = $this->routes[$method][$path] ?? null;
+        foreach ($routes as $route) {
+            // Exact match first
+            if ($route['regex'] === null && $route['path'] === $path) {
+                return [$route['handler'], []];
+            }
 
-        if (!$handler) {
-            http_response_code(404);
-            echo json_encode(['error' => 'Not found']);
+            // Regex match for {vars}
+            if ($route['regex'] !== null && preg_match($route['regex'], $path, $m)) {
+                $params = [];
+                foreach ($route['vars'] as $varName) {
+                    if (isset($m[$varName])) {
+                        $params[] = ctype_digit($m[$varName]) ? (int)$m[$varName] : $m[$varName];
+                    }
+                }
+                return [$route['handler'], $params];
+            }
+        }
+
+        return [null, []];
+    }
+
+    private function compilePath(string $path): array
+    {
+        if (strpos($path, '{') === false) {
+            return [null, []];
+        }
+
+        $vars = [];
+        $regex = preg_replace_callback('/\{([a-zA-Z_][a-zA-Z0-9_]*)\}/', function ($m) use (&$vars) {
+            $vars[] = $m[1];
+            return '(?P<' . $m[1] . '>[^/]+)';
+        }, $path);
+
+        return ['#^' . $regex . '$#', $vars];
+    }
+
+    private function applyGuards(object $controller, string $methodName): void
+    {
+        $ref = new ReflectionMethod($controller, $methodName);
+        $attributes = $ref->getAttributes(IsGranted::class);
+
+        foreach ($attributes as $attribute) {
+            $instance = $attribute->newInstance();
+
+            // If controller has method jwt(): JwtManager
+            if (method_exists($controller, 'jwt')) {
+                $instance->assert($controller->jwt());
+                continue;
+            }
+
+            // If controller has readable property $jwt
+            if (property_exists($controller, 'jwt')) {
+                try {
+                    /** @phpstan-ignore-next-line */
+                    $instance->assert($controller->jwt);
+                    continue;
+                } catch (\Throwable) {
+                    Response::json(['error' => 'Controller JWT is not accessible'], 500);
+                    exit;
+                }
+            }
+
+            Response::json(['error' => 'Controller missing JWT'], 500);
+            exit;
+        }
+    }
+
+    private function call($handler, array $params): void
+    {
+        if (is_array($handler)) {
+            call_user_func_array($handler, $params);
             return;
         }
 
-        if (is_array($handler) && is_object($handler[0])) {
-            $controller = $handler[0];
-            $methodName = $handler[1];
-
-            $ref = new ReflectionMethod($controller, $methodName);
-            $attributes = $ref->getAttributes(IsGranted::class);
-
-            foreach ($attributes as $attribute) {
-                $instance = $attribute->newInstance();
-
-                if (!property_exists($controller, 'jwt')) {
-                    Response::json(['error' => 'Controller missing JWT'], 500);
-                    exit;
-                }
-
-                $instance->assert($controller->jwt);
-            }
-
-            return call_user_func($handler);
-        }
-
-        if (is_array($handler) && is_string($handler[0])) {
-            $obj = new $handler[0]();
-            return $obj->{$handler[1]}();
-        }
-
-        return call_user_func($handler);
+        // Closure
+        call_user_func($handler, ...$params);
     }
 }
 
@@ -2794,6 +3032,24 @@ use PDO;
 final class SqlParkingRepository implements ParkingRepository
 {
     public function __construct(private PDO $db) {}
+public function create(array $data): int
+{
+    $stmt = $this->db->prepare("
+        INSERT INTO parkings (latitude, longitude, capacity, hourly_rate, opening_time, closing_time)
+        VALUES (:lat, :lng, :cap, :rate, :open, :close)
+    ");
+
+    $stmt->execute([
+        ':lat' => (float)($data['latitude'] ?? 0),
+        ':lng' => (float)($data['longitude'] ?? 0),
+        ':cap' => (int)($data['capacity'] ?? 0),
+        ':rate' => (float)($data['hourly_rate'] ?? 0),
+        ':open' => (string)($data['opening_time'] ?? '00:00:00'),
+        ':close' => (string)($data['closing_time'] ?? '23:59:59'),
+    ]);
+
+    return (int)$this->db->lastInsertId();
+}
 
     public function findById(int $id): ?Parking
     {
@@ -2844,7 +3100,9 @@ use PDO;
 
 final class SqlReservationRepository implements ReservationRepository
 {
-    public function __construct(private PDO $db) {}
+    public function __construct(private PDO $db)
+    {
+    }
 
     public function save(Reservation $reservation): Reservation
     {
@@ -2864,11 +3122,18 @@ final class SqlReservationRepository implements ReservationRepository
                 ':created_at' => $reservation->createdAt()->format('Y-m-d H:i:s'),
             ]);
 
-            return $reservation->withId((int)$this->db->lastInsertId());
+            return $reservation->withId((int) $this->db->lastInsertId());
         }
 
         // optional update later
         return $reservation;
+    }
+    public function findById(int $id): ?Reservation
+    {
+        $stmt = $this->db->prepare("SELECT * FROM reservations WHERE id = :id");
+        $stmt->execute([':id' => $id]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $row ? $this->hydrate($row) : null;
     }
 
     public function findByUserId(int $userId): array
@@ -2912,20 +3177,115 @@ final class SqlReservationRepository implements ReservationRepository
             ':end_at' => $endAt->format('Y-m-d H:i:s'),
         ]);
 
-        return (int)($stmt->fetch(PDO::FETCH_ASSOC)['c'] ?? 0);
+        return (int) ($stmt->fetch(PDO::FETCH_ASSOC)['c'] ?? 0);
     }
 
     private function hydrate(array $row): Reservation
     {
         return new Reservation(
-            (int)$row['id'],
-            (int)$row['user_id'],
-            (int)$row['parking_id'],
+            (int) $row['id'],
+            (int) $row['user_id'],
+            (int) $row['parking_id'],
             new \DateTimeImmutable($row['start_at']),
             new \DateTimeImmutable($row['end_at']),
             new \DateTimeImmutable($row['created_at']),
-            (string)$row['vehicle_type'],
-            (float)$row['amount']
+            (string) $row['vehicle_type'],
+            (float) $row['amount']
+        );
+    }
+}
+
+
+
+================================================
+FILE: Backend/src/Infrastructure/Persistence/SqlStationnementRepository.php
+================================================
+<?php
+declare(strict_types=1);
+
+namespace App\Infrastructure\Persistence;
+
+use App\Domain\Entity\Stationnement;
+use App\Domain\Repository\StationnementRepository;
+use PDO;
+
+final class SqlStationnementRepository implements StationnementRepository
+{
+    public function __construct(private PDO $db) {}
+
+    public function save(Stationnement $s): Stationnement
+    {
+        if ($s->id() === null) {
+            $stmt = $this->db->prepare("
+                INSERT INTO stationnements (reservation_id, entered_at, exited_at, billed_amount, penalty_amount, created_at)
+                VALUES (:rid, :entered, :exited, :billed, :penalty, :created)
+            ");
+            $stmt->execute([
+                ':rid' => $s->reservationId(),
+                ':entered' => $s->enteredAt()->format('Y-m-d H:i:s'),
+                ':exited' => $s->exitedAt()?->format('Y-m-d H:i:s'),
+                ':billed' => $s->billedAmount(),
+                ':penalty' => $s->penaltyAmount(),
+                ':created' => $s->createdAt()->format('Y-m-d H:i:s'),
+            ]);
+
+            return $s->withId((int)$this->db->lastInsertId());
+        }
+
+        return $s;
+    }
+
+    public function findActiveByReservationId(int $reservationId): ?Stationnement
+    {
+        $stmt = $this->db->prepare("
+            SELECT * FROM stationnements
+            WHERE reservation_id = :rid AND exited_at IS NULL
+            ORDER BY entered_at DESC
+            LIMIT 1
+        ");
+        $stmt->execute([':rid' => $reservationId]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $row ? $this->hydrate($row) : null;
+    }
+
+    public function close(int $stationnementId, \DateTimeImmutable $exitedAt, float $billedAmount, float $penaltyAmount): void
+    {
+        $stmt = $this->db->prepare("
+            UPDATE stationnements
+            SET exited_at = :exited, billed_amount = :billed, penalty_amount = :penalty
+            WHERE id = :id
+        ");
+        $stmt->execute([
+            ':id' => $stationnementId,
+            ':exited' => $exitedAt->format('Y-m-d H:i:s'),
+            ':billed' => $billedAmount,
+            ':penalty' => $penaltyAmount,
+        ]);
+    }
+
+    public function findLastByReservationId(int $reservationId): ?Stationnement
+    {
+        $stmt = $this->db->prepare("
+            SELECT * FROM stationnements
+            WHERE reservation_id = :rid
+            ORDER BY entered_at DESC
+            LIMIT 1
+        ");
+        $stmt->execute([':rid' => $reservationId]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $row ? $this->hydrate($row) : null;
+    }
+
+    private function hydrate(array $row): Stationnement
+    {
+        return new Stationnement(
+            (int)$row['id'],
+            (int)$row['reservation_id'],
+            new \DateTimeImmutable($row['entered_at']),
+            $row['exited_at'] ? new \DateTimeImmutable($row['exited_at']) : null,
+            $row['billed_amount'] !== null ? (float)$row['billed_amount'] : null,
+            $row['penalty_amount'] !== null ? (float)$row['penalty_amount'] : null,
+            new \DateTimeImmutable($row['created_at'])
         );
     }
 }
@@ -3212,7 +3572,7 @@ final class CreateReservation
             throw new \RuntimeException("Parking not found");
         }
 
-        $capacity = $parking->getNbPlaces(); // later rename to capacity()
+        $capacity = $parking->capacity();
 
         $overlapping = $this->reservationRepo->countOverlappingForParking($parkingId, $start, $end);
 
@@ -3225,81 +3585,6 @@ final class CreateReservation
     }
 }
 
-
-
-================================================
-FILE: Backend/src/UseCase/ReserverParking.php
-================================================
-<?php
-
-namespace App\UseCase;
-
-use App\Domain\Entity\parking;
-use App\Domain\Repository\ParkingReservationRepository;
-use DateTimeImmutable;
-use InvalidArgumentException;
-
-class ReserverParking
-{
-// Le Use Case dépend du CONTRAT (l'Interface Repository), pas de l'implémentation BDD concrète.
-    public function __construct(
-        private ParkingReservationRepository $repository
-    ) {}
-
-    /**
-     * Exécute le processus de réservation.
-     * * @param string $gps La localisation GPS de l'emplacement.
-     * @param float $tarif Le tarif applicable.
-     * @param DateTimeImmutable $heureDebut L'heure de début de la réservation.
-     * @param DateTimeImmutable $heureFin L'heure de fin de la réservation.
-     * @param int $placeId L'identifiant de la place à réserver (hypothèse pour la vérification).
-     * @return Parking L'entité de réservation nouvellement créée.
-     * @throws InvalidArgumentException Si la place est déjà réservée ou si les heures sont invalides.
-     */
-    public function execute(
-        string $gps,
-        float $tarif,
-        DateTimeImmutable $heureDebut,
-        DateTimeImmutable $heureFin,
-        int $placeId
-    ): Parking {
-
-        // --- 1. Logique métier / Validation des données ---
-
-        if ($heureDebut >= $heureFin) {
-            throw new InvalidArgumentException("L'heure de fin doit être postérieure à l'heure de début.");
-        }
-
-        if ($heureDebut < new DateTimeImmutable()) {
-            throw new InvalidArgumentException("Impossible de réserver dans le passé.");
-        }
-
-        // --- 2. Utilisation du Repository (Vérification de la disponibilité) ---
-
-        // Le Use Case utilise la méthode définie dans l'Interface pour vérifier si le créneau est libre.
-        if ($this->repository->isPlaceReserved($placeId, $heureDebut, $heureFin)) {
-            // L'exception métier (Business Exception) est levée ici.
-            throw new InvalidArgumentException(sprintf(
-                "La place %d est déjà réservée pour ce créneau horaire.",
-                $placeId
-            ));
-        }
-        $parkingEntity = new Parking(
-            $gps,
-            $tarif,
-            \DateTime::createFromImmutable($heureDebut),
-            \DateTime::createFromImmutable($heureFin),
-            [] // list_stationnement, non géré dans ce use case
-        );
-
-        // --- 4. Persistance (Sauvegarde) ---
-
-
-        $this->repository->save($parkingEntity);
-
-        return $parkingEntity;
-    }
-}
 
 
 ================================================
@@ -3688,6 +3973,61 @@ final class VerifyTwoFactor
 
 
 ================================================
+FILE: Backend/src/UseCase/Billing/BillingCalculator.php
+================================================
+<?php
+declare(strict_types=1);
+
+namespace App\UseCase\Billing;
+
+final class BillingCalculator
+{
+    public function __construct(
+        private readonly int $slotMinutes = 15,
+        private readonly float $penaltyMultiplier = 2.0
+    ) {}
+
+    public function billedMinutes(\DateTimeImmutable $start, \DateTimeImmutable $end): int
+    {
+        $seconds = max(0, $end->getTimestamp() - $start->getTimestamp());
+        $minutes = (int)ceil($seconds / 60);
+        $slot = $this->slotMinutes;
+        return (int)(ceil($minutes / $slot) * $slot);
+    }
+
+    public function amountForMinutes(int $minutes, float $hourlyRate): float
+    {
+        return round(($minutes / 60) * $hourlyRate, 2);
+    }
+
+    public function compute(
+        \DateTimeImmutable $enteredAt,
+        \DateTimeImmutable $exitedAt,
+        \DateTimeImmutable $reservedEndAt,
+        float $hourlyRate
+    ): array {
+        $billedMin = $this->billedMinutes($enteredAt, $exitedAt);
+        $base = $this->amountForMinutes($billedMin, $hourlyRate);
+
+        $penalty = 0.0;
+        if ($exitedAt > $reservedEndAt) {
+            $overtimeMin = $this->billedMinutes($reservedEndAt, $exitedAt);
+            $overtimeAmount = $this->amountForMinutes($overtimeMin, $hourlyRate);
+            $penalty = round($overtimeAmount * ($this->penaltyMultiplier - 1.0), 2); // surcharge, pas double facturation totale
+        }
+
+        return [
+            'billed_minutes' => $billedMin,
+            'base_amount' => $base,
+            'penalty_amount' => $penalty,
+            'total_amount' => round($base + $penalty, 2),
+        ];
+    }
+}
+
+
+
+================================================
 FILE: Backend/src/UseCase/Parking/CheckAvailability.php
 ================================================
 <?php
@@ -3695,40 +4035,46 @@ declare(strict_types=1);
 
 namespace App\UseCase\Parking;
 
-use App\Infrastructure\Repository\ParkingRepository;
-use App\Infrastructure\Repository\ReservationRepository;
-use Exception;
+use App\Domain\Repository\ParkingRepository;
+use App\Domain\Repository\ReservationRepository;
 
-class CheckAvailability {
-    private ParkingRepository $parkingRepo;
-    private ReservationRepository $reservationRepo;
+final class CheckAvailability
+{
+    public function __construct(
+        private readonly ParkingRepository $parkingRepo,
+        private readonly ReservationRepository $reservationRepo
+    ) {}
 
-    public function __construct() {
-        $this->parkingRepo = new ParkingRepository();
-        $this->reservationRepo = new ReservationRepository();
-    }
+    public function execute(array $data): array
+    {
+        $parkingId = (int)($data['parking_id'] ?? 0);
+        $startAt = (string)($data['start_at'] ?? '');
+        $endAt = (string)($data['end_at'] ?? '');
 
-    public function execute(array $data): array {
-        $parkingId = $data['parkingId'] ?? 0;
-        $dateDebut = $data['dateDebut'] ?? '';
-        $dateFin = $data['dateFin'] ?? '';
-
-        if (!$parkingId || !$dateDebut || !$dateFin) {
-            throw new Exception('Données incomplètes', 400);
+        if ($parkingId <= 0 || $startAt === '' || $endAt === '') {
+            throw new \RuntimeException('Missing fields');
         }
 
-        $parking = $this->parkingRepo->findById((int)$parkingId);
-        if (!$parking) {
-            throw new Exception('Parking non trouvé', 404);
+        $start = new \DateTimeImmutable($startAt);
+        $end = new \DateTimeImmutable($endAt);
+
+        $parking = $this->parkingRepo->findById($parkingId);
+        if ($parking === null) {
+            throw new \RuntimeException('Parking not found');
         }
 
-        $reserved = $this->reservationRepo->countConfirmed((int)$parkingId, $dateDebut, $dateFin);
-        $available = max(0, $parking['nombre_places'] - $reserved);
+        $capacity = $parking->capacity();
+        $overlapping = $this->reservationRepo->countOverlappingForParking($parkingId, $start, $end);
+        $remaining = max(0, $capacity - $overlapping);
 
         return [
-            'available' => $available > 0,
-            'places_disponibles' => $available,
-            'parking' => $parking
+            'parking_id' => $parkingId,
+            'capacity' => $capacity,
+            'overlapping' => $overlapping,
+            'remaining' => $remaining,
+            'available' => $remaining > 0,
+            'start_at' => $start->format(DATE_ATOM),
+            'end_at' => $end->format(DATE_ATOM),
         ];
     }
 }
@@ -3743,28 +4089,35 @@ declare(strict_types=1);
 
 namespace App\UseCase\Parking;
 
-use App\Infrastructure\Repository\ParkingRepository;
-use Exception;
+use App\Domain\Repository\ParkingRepository;
 
-class CreateParking {
-    private ParkingRepository $parkingRepo;
+final class CreateParking
+{
+    public function __construct(private readonly ParkingRepository $parkingRepo) {}
 
-    public function __construct() {
-        $this->parkingRepo = new ParkingRepository();
-    }
+    public function execute(array $data): array
+    {
+        $latitude = $data['latitude'] ?? null;
+        $longitude = $data['longitude'] ?? null;
+        $capacity = (int)($data['capacity'] ?? 0);
+        $hourlyRate = $data['hourly_rate'] ?? null;
+        $openingTime = (string)($data['opening_time'] ?? '');
+        $closingTime = (string)($data['closing_time'] ?? '');
 
-    public function execute(array $user, array $data): array {
-        if ($user['role'] !== 'owner') {
-            throw new Exception('Non autorisé', 401);
+        if (!is_numeric($latitude) || !is_numeric($longitude) || $capacity <= 0 || !is_numeric($hourlyRate) || $openingTime === '' || $closingTime === '') {
+            throw new \RuntimeException('Missing fields');
         }
 
-        if (empty($data['nom']) || empty($data['adresse']) || empty($data['nombre_places'])) {
-            throw new Exception('Données incomplètes', 400);
-        }
+        $id = $this->parkingRepo->create([
+            'latitude' => (float)$latitude,
+            'longitude' => (float)$longitude,
+            'capacity' => $capacity,
+            'hourly_rate' => (float)$hourlyRate,
+            'opening_time' => $openingTime,
+            'closing_time' => $closingTime,
+        ]);
 
-        $id = $this->parkingRepo->create((int)$user['id'], $data);
         $parking = $this->parkingRepo->findById($id);
-
         return ['parking' => $parking];
     }
 }
@@ -3779,7 +4132,7 @@ declare(strict_types=1);
 
 namespace App\UseCase\Parking;
 
-use App\Infrastructure\Repository\ParkingRepository;
+use App\Domain\Repository\ParkingRepository;
 use Exception;
 
 class GetOwnerParkings {
@@ -3846,24 +4199,29 @@ declare(strict_types=1);
 
 namespace App\UseCase\Parking;
 
-use App\Infrastructure\Repository\ParkingRepository;
-use Exception;
+use App\Domain\Repository\ParkingRepository;
 
-class GetParkingDetails {
-    private ParkingRepository $parkingRepo;
+final class GetParkingDetails
+{
+    public function __construct(
+        private readonly ParkingRepository $parkingRepo
+    ) {}
 
-    public function __construct() {
-        $this->parkingRepo = new ParkingRepository();
-    }
-
-    public function execute(int $id): array {
-        $parking = $this->parkingRepo->findById($id);
-        
-        if (!$parking) {
-            throw new Exception('Parking non trouvé', 404);
+    public function execute(int $parkingId): array
+    {
+        $parking = $this->parkingRepo->findById($parkingId);
+        if ($parking === null) {
+            throw new \RuntimeException('Parking not found');
         }
 
-        return $parking;
+        return [
+            'id' => $parking->id(),
+            'capacity' => $parking->capacity(),
+            'gps' => $parking->gps(),
+            'hourly_rate' => $parking->hourlyRate(),
+            'opening_time' => $parking->openingTime()->format('H:i:s'),
+            'closing_time' => $parking->closingTime()->format('H:i:s'),
+        ];
     }
 }
 
@@ -3923,123 +4281,197 @@ class SearchParkings {
 
 
 ================================================
-FILE: Backend/src/UseCase/Reservation/CancelReservation.php
+FILE: Backend/src/UseCase/Reservation/EnterReservation.php
 ================================================
 <?php
 declare(strict_types=1);
 
 namespace App\UseCase\Reservation;
 
-use App\Infrastructure\Repository\ReservationRepository;
-use Exception;
+use App\Domain\Repository\ReservationRepository;
+use App\Domain\Repository\StationnementRepository;
+use App\Domain\Entity\Stationnement;
 
-class CancelReservation {
-    private ReservationRepository $reservationRepo;
+final class EnterReservation
+{
+    public function __construct(
+        private readonly ReservationRepository $reservationRepo,
+        private readonly StationnementRepository $stationnementRepo
+    ) {}
 
-    public function __construct() {
-        $this->reservationRepo = new ReservationRepository();
-    }
-
-    public function execute(int $id, array $user): array {
-        $reservation = $this->reservationRepo->findByIdAndUser($id, (int)$user['id']);
-        
-        if (!$reservation) {
-            throw new Exception('Réservation non trouvée', 404);
+    public function execute(int $userId, int $reservationId): Stationnement
+    {
+        $res = $this->reservationRepo->findById($reservationId);
+        if (!$res) {
+            throw new \RuntimeException('Reservation not found');
         }
 
-        $this->reservationRepo->cancel($id);
-        
-        return ['message' => 'Réservation annulée'];
+        if ($res->userId() !== $userId) {
+            throw new \RuntimeException('Forbidden');
+        }
+
+        $now = new \DateTimeImmutable('now');
+
+        // "réservation active" = now entre start et end
+        if ($now < $res->startAt() || $now > $res->endAt()) {
+            throw new \RuntimeException('Reservation not active');
+        }
+
+        $active = $this->stationnementRepo->findActiveByReservationId($reservationId);
+        if ($active) {
+            throw new \RuntimeException('Already entered');
+        }
+
+        $s = Stationnement::enter($reservationId, $now);
+        return $this->stationnementRepo->save($s);
     }
 }
 
 
 
 ================================================
-FILE: Backend/src/UseCase/Reservation/CreateReservation.php
+FILE: Backend/src/UseCase/Reservation/ExitReservation.php
 ================================================
 <?php
 declare(strict_types=1);
 
 namespace App\UseCase\Reservation;
 
-use App\Infrastructure\Repository\ReservationRepository;
-use App\Infrastructure\Repository\ParkingRepository;
-use DateTime;
-use Exception;
+use App\Domain\Repository\ReservationRepository;
+use App\Domain\Repository\StationnementRepository;
+use App\Domain\Repository\ParkingRepository;
+use App\UseCase\Billing\BillingCalculator;
 
-class CreateReservation {
-    private ReservationRepository $reservationRepo;
-    private ParkingRepository $parkingRepo;
+final class ExitReservation
+{
+    public function __construct(
+        private readonly ReservationRepository $reservationRepo,
+        private readonly StationnementRepository $stationnementRepo,
+        private readonly ParkingRepository $parkingRepo,
+        private readonly BillingCalculator $billing
+    ) {}
 
-    public function __construct() {
-        $this->reservationRepo = new ReservationRepository();
-        $this->parkingRepo = new ParkingRepository();
-    }
+    public function execute(int $userId, int $reservationId): array
+    {
+        $res = $this->reservationRepo->findById($reservationId);
+        if (!$res) throw new \RuntimeException('Reservation not found');
+        if ($res->userId() !== $userId) throw new \RuntimeException('Forbidden');
 
-    public function execute(array $data, array $user): array {
-        $parkingId = $data['parkingId'] ?? 0;
-        $dateDebut = $data['date_debut'] ?? '';
-        $dateFin = $data['date_fin'] ?? '';
-        $vehicule = $data['vehicule'] ?? '';
-        $immatriculation = $data['immatriculation'] ?? '';
-        $montant = $data['montant'] ?? 0;
+        $active = $this->stationnementRepo->findActiveByReservationId($reservationId);
+        if (!$active) throw new \RuntimeException('Not entered');
 
-        // Validations
-        if (empty($dateDebut) || empty($dateFin)) {
-            throw new Exception('Dates manquantes', 400);
-        }
+        $parking = $this->parkingRepo->findById($res->parkingId());
+        if (!$parking) throw new \RuntimeException('Parking not found');
 
-        $now = new DateTime();
-        $start = new DateTime($dateDebut);
-        $end = new DateTime($dateFin);
+        $now = new \DateTimeImmutable('now');
 
-        if ($end <= $start) {
-            throw new Exception('La date de fin doit être après la date de début', 400);
-        }
-        
-        if ($start < $now) {
-             // On tolère une petite marge ou on bloque ? Pour l'instant on bloque si c'est vraiment dans le passé
-             // throw new Exception('La date de début ne peut pas être dans le passé', 400);
-        }
+        $calc = $this->billing->compute(
+            $active->enteredAt(),
+            $now,
+            $res->endAt(),
+            $parking->hourlyRate()
+        );
 
-        if ($this->reservationRepo->hasOverlapForUser((int)$user['id'], $dateDebut, $dateFin)) {
-            throw new Exception('Vous avez déjà une réservation sur cette période', 409);
-        }
-
-        $parking = $this->parkingRepo->findById((int)$parkingId);
-        if (!$parking) {
-            throw new Exception('Parking non trouvé', 404);
-        }
-
-        $reserved = $this->reservationRepo->countConfirmed((int)$parkingId, $dateDebut, $dateFin);
-
-        if (($parking['nombre_places'] - $reserved) <= 0) {
-            throw new Exception('Plus de places disponibles pour cette période', 409);
-        }
-
-        // Création
-        $id = $this->reservationRepo->create(
-            (int)$user['id'], 
-            (int)$parkingId, 
-            $dateDebut, 
-            $dateFin, 
-            $vehicule, 
-            $immatriculation, 
-            (float)$montant
+        $this->stationnementRepo->close(
+            (int)$active->id(),
+            $now,
+            (float)$calc['base_amount'],
+            (float)$calc['penalty_amount']
         );
 
         return [
-            'success' => true, 
-            'message' => 'Réservation confirmée',
-            'reservation' => [
-                'id' => $id,
-                'montant' => $montant,
-                'date_debut' => $dateDebut,
-                'date_fin' => $dateFin,
-                'parking_id' => $parkingId
-            ]
+            'reservation_id' => $reservationId,
+            'exited_at' => $now->format(DATE_ATOM),
+            'base_amount' => $calc['base_amount'],
+            'penalty_amount' => $calc['penalty_amount'],
+            'total_amount' => $calc['total_amount'],
+            'billed_minutes' => $calc['billed_minutes'],
         ];
+    }
+}
+
+
+
+================================================
+FILE: Backend/src/UseCase/Reservation/GetInvoiceHtml.php
+================================================
+<?php
+declare(strict_types=1);
+
+namespace App\UseCase\Reservation;
+
+use App\Domain\Repository\ReservationRepository;
+use App\Domain\Repository\StationnementRepository;
+use App\Domain\Repository\ParkingRepository;
+
+final class GetInvoiceHtml
+{
+    public function __construct(
+        private readonly ReservationRepository $reservationRepo,
+        private readonly StationnementRepository $stationnementRepo,
+        private readonly ParkingRepository $parkingRepo
+    ) {}
+
+    public function execute(int $userId, int $reservationId): string
+    {
+        $res = $this->reservationRepo->findById($reservationId);
+        if (!$res) throw new \RuntimeException('Reservation not found');
+        if ($res->userId() !== $userId) throw new \RuntimeException('Forbidden');
+
+        $parking = $this->parkingRepo->findById($res->parkingId());
+        if (!$parking) throw new \RuntimeException('Parking not found');
+
+        $st = $this->stationnementRepo->findLastByReservationId($reservationId);
+
+        $entered = $st?->enteredAt()?->format('Y-m-d H:i:s') ?? '—';
+        $exited  = $st?->exitedAt()?->format('Y-m-d H:i:s') ?? '—';
+
+        $base = $st?->billedAmount();
+        $pen  = $st?->penaltyAmount();
+        $total = ($base ?? 0) + ($pen ?? 0);
+
+        return "<!doctype html>
+<html lang='fr'>
+<head>
+<meta charset='utf-8'>
+<title>Facture réservation #{$reservationId}</title>
+<style>
+body{font-family:Arial,sans-serif;margin:24px;color:#111}
+h1{margin:0 0 12px}
+.card{border:1px solid #ddd;border-radius:10px;padding:16px;margin:12px 0}
+.row{display:flex;justify-content:space-between;margin:6px 0}
+.small{color:#555;font-size:12px}
+</style>
+</head>
+<body>
+<h1>Facture - Réservation #{$reservationId}</h1>
+<div class='small'>Générée le ".date('Y-m-d H:i:s')."</div>
+
+<div class='card'>
+  <h3>Réservation</h3>
+  <div class='row'><div>Parking</div><div>#{$res->parkingId()}</div></div>
+  <div class='row'><div>Début réservé</div><div>{$res->startAt()->format('Y-m-d H:i:s')}</div></div>
+  <div class='row'><div>Fin réservée</div><div>{$res->endAt()->format('Y-m-d H:i:s')}</div></div>
+  <div class='row'><div>Véhicule</div><div>{$res->vehicleType()}</div></div>
+</div>
+
+<div class='card'>
+  <h3>Stationnement</h3>
+  <div class='row'><div>Entrée</div><div>{$entered}</div></div>
+  <div class='row'><div>Sortie</div><div>{$exited}</div></div>
+</div>
+
+<div class='card'>
+  <h3>Montants</h3>
+  <div class='row'><div>Base</div><div>".($base !== null ? number_format($base, 2, ',', ' ') . " €" : "—")."</div></div>
+  <div class='row'><div>Pénalité</div><div>".($pen !== null ? number_format($pen, 2, ',', ' ') . " €" : "—")."</div></div>
+  <hr>
+  <div class='row'><strong>Total</strong><strong>".number_format($total, 2, ',', ' ')." €</strong></div>
+</div>
+
+<div class='small'>Tarif horaire parking: ".number_format($parking->hourlyRate(), 2, ',', ' ')." €</div>
+</body>
+</html>";
     }
 }
 
@@ -8535,33 +8967,35 @@ export const routes = {
 ================================================
 FILE: frontend/src/services/apiService.js
 ================================================
-<<<<<<< HEAD
 // frontend/src/services/apiService.js
 const API_BASE_URL = "http://localhost:8001";
 
-async function handleResponse(response) {
-  let data = null;
+async function readJsonSafe(res) {
   try {
-    data = await response.json();
+    return await res.json();
   } catch {
-    // certains endpoints peuvent ne pas renvoyer de JSON
+    return null;
   }
+}
 
-  if (!response.ok) {
-    const message =
+async function handleResponse(res) {
+  const data = await readJsonSafe(res);
+
+  if (!res.ok) {
+    const msg =
       data?.error ||
       data?.message ||
-      `Erreur API (${response.status})`;
-    throw new Error(message);
+      `API error (${res.status})`;
+    throw new Error(msg);
   }
 
   return data;
 }
 
 /**
- * Helper interne :
- * - fait le fetch avec credentials: "include"
- * - sur 401, tente un refresh puis rejoue la requête une fois
+ * Fetch helper:
+ * - always sends cookies
+ * - on 401 tries refresh once, then retries request once
  */
 async function authFetch(path, options = {}, retry = true) {
   const res = await fetch(`${API_BASE_URL}${path}`, {
@@ -8570,40 +9004,17 @@ async function authFetch(path, options = {}, retry = true) {
   });
 
   if (res.status === 401 && retry) {
-    // tentative de refresh silencieux
-    const refreshed = await apiService.refresh();
-    if (!refreshed) {
-      return res; // token mort, on laisse la 401
-    }
-
-    // on rejoue la requête UNE seule fois
+    const ok = await apiService.refresh();
+    if (!ok) return res;
     return authFetch(path, options, false);
   }
 
   return res;
 }
 
-=======
-const API_BASE_URL = 'http://localhost:8001/api';
-
-const handleResponse = async (response) => {
-  const data = await response.json();
-  if (!response.ok) {
-    const error = (data && data.error) || response.statusText;
-    throw new Error(error);
-  }
-  return data;
-};
-
->>>>>>> origin/Rayane
 export const apiService = {
-  /**
-   * Connexion utilisateur :
-   * - POST /api/auth/login
-   * - puis /api/me via authFetch (token fraîchement posé)
-   */
+  // ---------- AUTH ----------
   async login(email, password) {
-<<<<<<< HEAD
     const res = await fetch(`${API_BASE_URL}/api/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -8613,54 +9024,11 @@ export const apiService = {
 
     const data = await handleResponse(res);
 
-    if (data.status === "2fa_required") {
-      throw new Error(
-        "Double authentification requise (2FA), pas encore gérée côté interface."
-      );
+    // Si ton back renvoie un statut 2FA, tu peux le gérer ici plus tard
+    if (data?.status === "2fa_required") {
+      return { status: "2fa_required" };
     }
 
-    const meRes = await authFetch("/api/me", {
-      method: "GET",
-    });
-
-    const me = await handleResponse(meRes);
-
-    return {
-      success: true,
-      user: {
-        id: me.id,
-        email: me.email,
-        firstname: me.firstname,
-        lastname: me.lastname,
-        role: me.role ? me.role.toLowerCase().trim() : "user",
-
-      },
-    };
-  },
-
-  /**
-   * Inscription :
-   * - POST /api/auth/register
-   * - puis login auto
-   */
-  async register(form) {
-    const res = await fetch(`${API_BASE_URL}/api/auth/register`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({
-        firstname: form.firstname,
-        lastname: form.lastname,
-        email: form.email,
-        password: form.password,
-        role: form.role === "owner" ? "OWNER" : "USER",
-      }),
-    });
-
-    const data = await handleResponse(res);
-
-    // le back pose déjà les cookies ici.
-    // maintenant on récupère /api/me comme dans login()
     const meRes = await authFetch("/api/me", { method: "GET" });
     const me = await handleResponse(meRes);
 
@@ -8669,235 +9037,115 @@ export const apiService = {
       user: {
         id: me.id,
         email: me.email,
-        role: me.role ? me.role.toLowerCase().trim() : "user",
-        firstname: me.firstname,
-        lastname: me.lastname,
+        firstname: me.firstname ?? null,
+        lastname: me.lastname ?? null,
+        role: me.role ? String(me.role).toLowerCase().trim() : "user",
       },
     };
-  }
-  ,
+  },
 
-  /**
-   * Récupère l'utilisateur courant :
-   * - GET /api/me
-   * - si 401 → tente un refresh → rejoue /api/me
-   * - si toujours 401 → retourne null
-   */
+  async register({ firstname, lastname, email, password, role }) {
+    const res = await fetch(`${API_BASE_URL}/api/auth/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        firstname,
+        lastname,
+        email,
+        password,
+        role: role === "owner" ? "OWNER" : "USER",
+      }),
+    });
+
+    await handleResponse(res);
+
+    const meRes = await authFetch("/api/me", { method: "GET" });
+    const me = await handleResponse(meRes);
+
+    return {
+      success: true,
+      user: {
+        id: me.id,
+        email: me.email,
+        firstname: me.firstname ?? null,
+        lastname: me.lastname ?? null,
+        role: me.role ? String(me.role).toLowerCase().trim() : "user",
+      },
+    };
+  },
+
   async getCurrentUser() {
     const res = await authFetch("/api/me", { method: "GET" });
-
-    if (res.status === 401) {
-      return null;
-    }
+    if (res.status === 401) return null;
 
     const me = await handleResponse(res);
-
     return {
       id: me.id,
       email: me.email,
       firstname: me.firstname ?? null,
       lastname: me.lastname ?? null,
-      role: me.role ? me.role.toLowerCase().trim() : "user",
+      role: me.role ? String(me.role).toLowerCase().trim() : "user",
     };
   },
 
-  /**
-   * Appelle /api/auth/refresh pour obtenir un nouveau ACCESS_TOKEN
-   * Retourne true si ça a marché, false sinon.
-   */
   async refresh() {
     try {
       const res = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
         method: "POST",
         credentials: "include",
       });
-
-      try {
-        await handleResponse(res);
-        return true;
-      } catch {
-        return false;
-      }
-
+      await handleResponse(res);
+      return true;
     } catch {
       return false;
-=======
-    const response = await fetch(`${API_BASE_URL}/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
-    });
-    return handleResponse(response);
-  },
-
-  /**
-   * Inscription utilisateur
-   */
-  async register(userData) {
-    const response = await fetch(`${API_BASE_URL}/auth/register`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(userData),
-    });
-    return handleResponse(response);
-  },
-
-  /**
-   * Rechercher des parkings avec disponibilité en temps réel
-   */
-  async searchParkings(params = {}) {
-    const query = new URLSearchParams();
-    if (params.ville) query.append('ville', params.ville);
-    if (params.vehicule) query.append('vehicule', params.vehicule);
-    if (params.dateDebut) query.append('dateDebut', params.dateDebut);
-    if (params.dateFin) query.append('dateFin', params.dateFin);
-    if (params.sort) query.append('sort', params.sort);
-
-    const response = await fetch(`${API_BASE_URL}/parkings?${query.toString()}`);
-    return handleResponse(response);
-  },
-
-  /**
-   * Récupérer les détails d'un parking
-   */
-  async getParkingDetails(id) {
-    const response = await fetch(`${API_BASE_URL}/parkings/${id}`);
-    return handleResponse(response);
-  },
-
-  /**
-   * Vérifier la disponibilité d'un parking pour une période
-   */
-  async checkAvailability(parkingId, dateDebut, dateFin) {
-    const response = await fetch(`${API_BASE_URL}/parkings/check-availability`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ parkingId, dateDebut, dateFin }),
-    });
-    return handleResponse(response);
-  },
-
-  /**
-   * Réserver un parking
-   */
-  async reserveParking(token, parkingId, reservationData) {
-    const response = await fetch(`${API_BASE_URL}/reservations`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify({
-        parkingId,
-        ...reservationData
-      }),
-    });
-    return handleResponse(response);
-  },
-
-  /**
-   * Récupérer les réservations de l'utilisateur
-   */
-  async getReservations(token) {
-    const response = await fetch(`${API_BASE_URL}/reservations`, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
-    });
-    return handleResponse(response);
-  },
-  
-  /**
-   * Annuler une réservation
-   */
-  async cancelReservation(token, reservationId) {
-      const response = await fetch(`${API_BASE_URL}/reservations/${reservationId}/cancel`, {
-          method: 'POST',
-           headers: {
-            'Authorization': `Bearer ${token}`
-          }
-      });
-      return handleResponse(response);
-  },
-
-  /**
-   * Récupérer les stationnements actifs (dérivé des réservations)
-   */
-  async getStationnements(token) {
-    try {
-        const data = await this.getReservations(token);
-        const now = new Date();
-        const active = (data.reservations || []).filter(r => {
-            const start = new Date(r.date_debut);
-            const end = new Date(r.date_fin);
-            return r.statut === 'confirmée' && start <= now && end >= now;
-        });
-        return { success: true, stationnements: active };
-    } catch (error) {
-        console.error("Erreur getStationnements:", error);
-        return { success: false, stationnements: [] };
->>>>>>> origin/Rayane
     }
   },
 
-  /**
-<<<<<<< HEAD
-   * Déconnexion : purge les cookies côté back
-   */
   async logout() {
     await fetch(`${API_BASE_URL}/api/auth/logout`, {
       method: "POST",
       credentials: "include",
     });
   },
+
+  // ---------- RESERVATIONS ----------
+  async createReservation({ parkingId, startAt, endAt, vehicleType, amount }) {
+    const res = await authFetch("/api/reservations", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        parking_id: parkingId,
+        start_at: startAt,
+        end_at: endAt,
+        vehicle_type: vehicleType,
+        amount,
+      }),
+    });
+    return handleResponse(res);
+  },
+
+  async getMyReservations() {
+    const res = await authFetch("/api/reservations/me", { method: "GET" });
+    return handleResponse(res);
+  },
+
+  // ---------- PARKINGS (à brancher selon tes routes réelles) ----------
+  async searchParkings(query = {}) {
+    const qs = new URLSearchParams(query).toString();
+    const res = await authFetch(`/api/parkings${qs ? `?${qs}` : ""}`, {
+      method: "GET",
+    });
+    return handleResponse(res);
+  },
+
+  async getParkingDetails(id) {
+    const res = await authFetch(`/api/parkings/${id}`, { method: "GET" });
+    return handleResponse(res);
+  },
 };
 
 export default apiService;
-=======
-   * --- OWNER METHODS ---
-   */
-  async getOwnerParkings(token) {
-    const response = await fetch(`${API_BASE_URL}/owner/parkings`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-    });
-    return handleResponse(response);
-  },
-
-  async addParking(token, parkingData) {
-    const response = await fetch(`${API_BASE_URL}/parkings`, {
-        method: 'POST',
-        headers: { 
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(parkingData)
-    });
-    return handleResponse(response);
-  },
-
-  async getMonthlyRevenue(token) {
-      const response = await fetch(`${API_BASE_URL}/owner/stats`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-      });
-      return handleResponse(response);
-  },
-
-  async getActiveReservations(token) {
-      const response = await fetch(`${API_BASE_URL}/owner/stats`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-      });
-      return handleResponse(response);
-  },
-
-  async getActiveStationnements(token) {
-      const response = await fetch(`${API_BASE_URL}/owner/stats`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-      });
-      return handleResponse(response);
-  }
-};
->>>>>>> origin/Rayane
 
 
 

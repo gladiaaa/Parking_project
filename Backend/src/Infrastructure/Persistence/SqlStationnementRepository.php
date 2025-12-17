@@ -120,4 +120,36 @@ public function countActiveByParkingId(int $parkingId): int
     return (int)$stmt->fetchColumn();
 }
 
+public function revenueForParking(string $from, string $to, int $parkingId): array
+{
+    $stmt = $this->db->prepare('
+        SELECT
+          COUNT(*) AS count_exits,
+          COALESCE(SUM(s.billed_amount), 0) AS total_billed,
+          COALESCE(SUM(s.penalty_amount), 0) AS total_penalty,
+          COALESCE(SUM(COALESCE(s.billed_amount,0) + COALESCE(s.penalty_amount,0)), 0) AS total
+        FROM stationnements s
+        JOIN reservations r ON r.id = s.reservation_id
+        WHERE r.parking_id = :parking_id
+          AND s.exited_at IS NOT NULL
+          AND s.exited_at >= :from
+          AND s.exited_at < :to
+    ');
+
+    $stmt->execute([
+        'parking_id' => $parkingId,
+        'from' => $from,
+        'to' => $to,
+    ]);
+
+    $row = $stmt->fetch(\PDO::FETCH_ASSOC) ?: [];
+
+    return [
+        'count_exits'   => (int)($row['count_exits'] ?? 0),
+        'total_billed'  => (float)($row['total_billed'] ?? 0),
+        'total_penalty' => (float)($row['total_penalty'] ?? 0),
+        'total'         => (float)($row['total'] ?? 0),
+    ];
+}
+
 }

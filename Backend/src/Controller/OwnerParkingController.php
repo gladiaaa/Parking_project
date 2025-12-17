@@ -9,6 +9,7 @@ use App\Infrastructure\Security\JwtManager;
 use App\UseCase\Owner\ListOwnerParkings;
 use App\UseCase\Owner\ListParkingReservationsForOwner;
 use App\UseCase\Owner\ListActiveStationnementsForOwner;
+use App\UseCase\Owner\GetMonthlyRevenueForOwner;
 use App\UseCase\Parking\CreateParking;
 
 
@@ -20,6 +21,7 @@ final class OwnerParkingController
         private ListParkingReservationsForOwner $listParkingReservationsForOwner,
         private ListActiveStationnementsForOwner $listActiveStationnementsForOwner,
         private CreateParking $createParking,
+        private GetMonthlyRevenueForOwner $getMonthlyRevenueForOwner,
 
     ) {
     }
@@ -29,26 +31,26 @@ final class OwnerParkingController
     {
         return $this->jwt;
     }
-    
-   #[IsGranted('OWNER')]
-public function createParking(): void
-{
-    $payload = $this->jwt->readAccessFromCookie();
-    if (!$payload) {
-        Response::json(['error' => 'Unauthorized'], 401);
-        return;
-    }
 
-    $ownerId = (int)($payload['sub'] ?? 0);
-    $data = json_decode(file_get_contents('php://input') ?: '[]', true) ?: [];
+    #[IsGranted('OWNER')]
+    public function createParking(): void
+    {
+        $payload = $this->jwt->readAccessFromCookie();
+        if (!$payload) {
+            Response::json(['error' => 'Unauthorized'], 401);
+            return;
+        }
 
-    try {
-        $result = $this->createParking->execute($ownerId, $data);
-        Response::json(['success' => true] + $result, 201);
-    } catch (\Throwable $e) {
-        Response::json(['success' => false, 'error' => $e->getMessage()], 400);
+        $ownerId = (int) ($payload['sub'] ?? 0);
+        $data = json_decode(file_get_contents('php://input') ?: '[]', true) ?: [];
+
+        try {
+            $result = $this->createParking->execute($ownerId, $data);
+            Response::json(['success' => true] + $result, 201);
+        } catch (\Throwable $e) {
+            Response::json(['success' => false, 'error' => $e->getMessage()], 400);
+        }
     }
-}
 
 
     #[IsGranted('OWNER')]
@@ -106,6 +108,29 @@ public function createParking(): void
         } catch (\RuntimeException $e) {
             $msg = $e->getMessage();
             $code = ($msg === 'Accès refusé') ? 403 : 404;
+            Response::json(['error' => $msg], $code);
+        }
+    }
+    #[IsGranted('OWNER')]
+    public function monthlyRevenue(int $id): void
+    {
+        $payload = $this->jwt->readAccessFromCookie();
+        if (!$payload) {
+            Response::json(['error' => 'Unauthorized'], 401);
+            return;
+        }
+
+        $ownerId = (int) ($payload['sub'] ?? 0);
+        $month = (string) ($_GET['month'] ?? '');
+
+        try {
+            $data = $this->getMonthlyRevenueForOwner->execute($ownerId, $id, $month);
+            Response::json(['data' => $data], 200);
+        } catch (\RuntimeException $e) {
+            $msg = $e->getMessage();
+            $code = ($msg === 'Accès refusé') ? 403 : 400;
+            if ($msg === 'Parking not found')
+                $code = 404;
             Response::json(['error' => $msg], $code);
         }
     }
