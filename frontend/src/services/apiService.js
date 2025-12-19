@@ -1,333 +1,220 @@
-const API_BASE_URL = 'http://localhost:8001/api';
+// src/services/apiService.js
 
-const handleResponse = async (response) => {
-  // Gestion automatique du refresh token si 401
-  if (response.status === 401 && !response.url.includes('/auth/refresh')) {
+const API_BASE_URL =
+  process.env.REACT_APP_API_BASE_URL || "http://localhost:8001/api";
+
+/**
+ * Petite util pour construire une query string propre
+ */
+function withQuery(path, query) {
+  if (!query || Object.keys(query).length === 0) return path;
+
+  const qs = new URLSearchParams();
+  Object.entries(query).forEach(([k, v]) => {
+    if (v === undefined || v === null || v === "") return;
+    qs.append(k, String(v));
+  });
+
+  const s = qs.toString();
+  return s ? `${path}?${s}` : path;
+}
+
+/**
+ * Parse JSON si possible, sinon texte (utile pour /invoice)
+ */
+async function parsePayload(res) {
+  const ct = res.headers.get("content-type") || "";
+  const isJson = ct.includes("application/json");
+  if (isJson) return res.json().catch(() => null);
+  return res.text().catch(() => null);
+}
+
+/**
+ * Request générique.
+ * - credentials: include => cookies JWT
+ * - auto refresh si 401 (une seule fois)
+ */
+async function request(path, { method = "GET", body, headers, raw = false, _retried = false } = {}) {
+  const res = await fetch(`${API_BASE_URL}${path}`, {
+    method,
+    credentials: "include",
+    headers: {
+      Accept: "application/json",
+      ...(body ? { "Content-Type": "application/json" } : {}),
+      ...(headers || {}),
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+
+  // 401 => tentative refresh UNE fois
+  if (res.status === 401 && !_retried && !path.startsWith("/auth/refresh")) {
     try {
-      // Tentative de refresh
-      await apiService.refreshToken();
-      // On rejoue la requête initiale (attention aux boucles infinies, à gérer dans l'implémentation finale)
-      // Pour l'instant on throw pour que le composant redirige vers login
-      throw new Error('Session expirée');
-    } catch (e) {
-      throw new Error('Session expirée');
+      await request("/auth/refresh", { method: "POST", _retried: true });
+      return request(path, { method, body, headers, raw, _retried: true });
+    } catch {
+      const err = new Error("Session expirée");
+      err.status = 401;
+      throw err;
     }
   }
 
-  const data = await response.json();
-  if (!response.ok) {
-    const error = (data && data.error) || response.statusText;
-    throw new Error(error);
+  // Si raw demandé (ex: invoice HTML), on renvoie direct le texte
+  if (raw) {
+    if (!res.ok) {
+      const payload = await parsePayload(res);
+      const err = new Error(
+        (payload && (payload.message || payload.error)) || res.statusText
+      );
+      err.status = res.status;
+      err.payload = payload;
+      throw err;
+    }
+    return res.text();
   }
-  return data;
-};
+
+  const payload = await parsePayload(res);
+
+  if (!res.ok) {
+    const err = new Error(
+      (payload && (payload.message || payload.error)) || res.statusText
+    );
+    err.status = res.status;
+    err.payload = payload;
+    throw err;
+  }
+
+  return payload;
+}
 
 export const apiService = {
-  // --- AUTH ---
+  // =====================
+  // AUTH
+  // =====================
 
-  /**
-   * Connexion utilisateur
-   * Payload: { email, password }
-   * Retour: JWT via cookies (géré par le navigateur)
-   */
-  async login(email, password) {
-    const response = await fetch(`${API_BASE_URL}/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
-      credentials: 'include'
+  login(email, password) {
+    return request("/auth/login", {
+      method: "POST",
+      body: { email, password },
     });
-    // Pas de return de token ici car cookie
-    return handleResponse(response);
   },
 
-  /**
-   * Inscription utilisateur
-   * Payload: { email, password, firstname, lastname, role }
-   */
-  async register(userData) {
-    const response = await fetch(`${API_BASE_URL}/auth/register`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(userData),
-      credentials: 'include'
+  register(userData) {
+    // userData: { email, password, firstname, lastname, role }
+    return request("/auth/register", {
+      method: "POST",
+      body: userData,
     });
-    return handleResponse(response);
   },
 
-  /**
-   * Refresh Token
-   * À appeler automatiquement si 401
-   */
-  async refreshToken() {
-    const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include'
-    });
-    return handleResponse(response);
+  refreshToken() {
+    return request("/auth/refresh", { method: "POST" });
   },
 
-  /**
-   * Déconnexion
-   */
-  async logout() {
-    const response = await fetch(`${API_BASE_URL}/auth/logout`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include'
-    });
-    return handleResponse(response);
+  logout() {
+    return request("/auth/logout", { method: "POST" });
   },
 
-  /**
-   * Récupérer l'utilisateur courant
-   * Retour: { id, email, role }
-   */
-  async me() {
-    const response = await fetch(`${API_BASE_URL}/me`, {
-      method: 'GET',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include'
-    });
-    return handleResponse(response);
+  me() {
+    return request("/me", { method: "GET" });
   },
 
-  // --- PARKINGS ---
+  // =====================
+  // PARKINGS (strict: selon ton bootstrap)
+  // =====================
 
-  /**
-   * Rechercher des parkings
-   * Note: L'endpoint /parkings/availability n'est pas pour la recherche globale mais pour un parking spécifique
-   * On garde l'endpoint existant s'il correspond, sinon on adapte selon la doc
-   * Doc: GET /api/parkings/details?id={parkingId} -> Détail
-   * Doc: GET /api/parkings/availability -> Dispo spécifique
-   * Il manque un endpoint de recherche globale dans la doc fournie ("Recherche parkings" n'est pas explicite sur l'endpoint)
-   * Je suppose que le backend a un endpoint GET /api/parkings (standard REST) comme vu dans le code précédent
-   * Mais je dois suivre STRICTEMENT la doc fournie.
-   * La doc dit:
-   * GET /api/parkings/details?id={parkingId}
-   * GET /api/parkings/availability
-   * GET /api/parkings/occupancy-now
-   * 
-   * Elle ne mentionne PAS de GET /api/parkings pour la liste.
-   * Cependant, le code précédent utilisait GET /api/parkings.
-   * Je vais supposer que pour la liste, c'est GET /api/parkings (car sinon impossible de lister).
-   * Si erreur 404, je le signalerai.
-   */
-  async searchParkings(params = {}) {
-    const query = new URLSearchParams();
-    if (params.ville) query.append('ville', params.ville);
-    // Adaptation aux query params standards si besoin, ou on laisse tel quel si le backend le supporte
-    const response = await fetch(`${API_BASE_URL}/parkings?${query.toString()}`, {
-      credentials: 'include'
-    });
-    return handleResponse(response);
+  getParkingDetails(id) {
+    return request(withQuery("/parkings/details", { id }), { method: "GET" });
   },
 
-  /**
-   * Récupérer les détails d'un parking
-   * Doc: GET /api/parkings/details?id={parkingId}
-   */
-  async getParkingDetails(id) {
-    const response = await fetch(`${API_BASE_URL}/parkings/details?id=${id}`, {
-      credentials: 'include'
-    });
-    return handleResponse(response);
+  checkAvailability(parkingId, startAt, endAt) {
+    return request(
+      withQuery("/parkings/availability", {
+        parking_id: parkingId,
+        start_at: startAt,
+        end_at: endAt,
+      }),
+      { method: "GET" }
+    );
   },
 
-  /**
-   * Vérifier la disponibilité
-   * Doc: GET /api/parkings/availability
-   * Query: parking_id, start_at, end_at
-   */
-  async checkAvailability(parkingId, startAt, endAt) {
-    const query = new URLSearchParams({
-      parking_id: parkingId,
-      start_at: startAt,
-      end_at: endAt
-    });
-    const response = await fetch(`${API_BASE_URL}/parkings/availability?${query.toString()}`, {
-      credentials: 'include'
-    });
-    return handleResponse(response);
+  getOccupancyNow() {
+    return request("/parkings/occupancy-now", { method: "GET" });
   },
 
-  /**
-   * Occupation actuelle
-   * Doc: GET /api/parkings/occupancy-now
-   */
-  async getOccupancyNow() {
-    const response = await fetch(`${API_BASE_URL}/parkings/occupancy-now`, {
-      credentials: 'include'
+  // ⚠️ Ton backend ne montre PAS de GET /parkings (liste).
+  // Donc je ne l’invente pas ici. Si vous en avez besoin, il faudra une route backend.
+
+  // =====================
+  // RESERVATIONS
+  // =====================
+
+  createReservation(reservationData) {
+    // adapte le payload EXACT au backend (parking_id, start_at, end_at, vehicle_type etc.)
+    return request("/reservations", {
+      method: "POST",
+      body: reservationData,
     });
-    return handleResponse(response);
   },
 
-  // --- RESERVATIONS ---
-
-  /**
-   * Créer une réservation
-   * Signature supportée: 
-   * 1. (reservationData) -> { parkingId, date_debut, ... }
-   * 2. (token, parkingId, data) -> compatibilité legacy
-   */
-  async reserveParking(arg1, arg2 = null, arg3 = null) {
-    let reservationData = {};
-
-    if (arg2 !== null && arg3 !== null) {
-      // Cas legacy: (token, parkingId, data)
-      reservationData = { 
-        ...arg3, 
-        parkingId: arg2 
-      };
-    } else {
-      // Cas standard: (reservationData)
-      reservationData = arg1;
-    }
-
-    const response = await fetch(`${API_BASE_URL}/reservations`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(reservationData),
-      credentials: 'include'
-    });
-    return handleResponse(response);
+  getMyReservations() {
+    return request("/reservations/me", { method: "GET" });
   },
 
-  /**
-   * Mes réservations
-   * Doc: GET /api/reservations/me
-   */
-  async getReservations() {
-    const response = await fetch(`${API_BASE_URL}/reservations/me`, {
-      credentials: 'include'
-    });
-    return handleResponse(response);
+  enterReservation(id) {
+    return request(`/reservations/${id}/enter`, { method: "POST" });
   },
 
-  /**
-   * Entrer dans le parking
-   * Doc: POST /api/reservations/{id}/enter
-   */
-  async enterReservation(id) {
-    const response = await fetch(`${API_BASE_URL}/reservations/${id}/enter`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include'
-    });
-    return handleResponse(response);
+  exitReservation(id) {
+    return request(`/reservations/${id}/exit`, { method: "POST" });
   },
 
-  /**
-   * Sortir du parking
-   * Doc: POST /api/reservations/{id}/exit
-   */
-  async exitReservation(id) {
-    const response = await fetch(`${API_BASE_URL}/reservations/${id}/exit`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include'
-    });
-    return handleResponse(response);
+  getInvoiceHtml(id) {
+    // backend renvoie du HTML
+    return request(`/reservations/${id}/invoice`, { method: "GET", raw: true });
   },
 
-  /**
-   * Facture
-   * Doc: GET /api/reservations/{id}/invoice
-   */
-  async getInvoice(id) {
-    const response = await fetch(`${API_BASE_URL}/reservations/${id}/invoice`, {
-      credentials: 'include'
+  // =====================
+  // SUBSCRIPTIONS
+  // =====================
+
+  createSubscription(subscriptionData) {
+    return request("/subscriptions", {
+      method: "POST",
+      body: subscriptionData,
     });
-    // Ici on retourne le blob ou le text car c'est du HTML/PDF potentiellement
-    if (!response.ok) throw new Error('Erreur facture');
-    return response.text();
   },
 
-  // --- ABONNEMENTS ---
-
-  /**
-   * Créer un abonnement
-   * Payload: { parking_id, start_date, months, weekly_slots }
-   */
-  async createSubscription(subscriptionData) {
-    const response = await fetch(`${API_BASE_URL}/subscriptions`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(subscriptionData),
-      credentials: 'include'
-    });
-    return handleResponse(response);
+  getMySubscriptions() {
+    return request("/subscriptions/me", { method: "GET" });
   },
 
-  /**
-   * Mes abonnements
-   * Doc: GET /api/subscriptions/me
-   */
-  async getSubscriptions() {
-    const response = await fetch(`${API_BASE_URL}/subscriptions/me`, {
-      credentials: 'include'
-    });
-    return handleResponse(response);
+  // =====================
+  // OWNER
+  // =====================
+
+  getOwnerParkings() {
+    return request("/owner/parkings", { method: "GET" });
   },
 
-  // --- OWNER ---
-
-  /**
-   * Mes parkings (Owner)
-   * Doc: GET /api/owner/parkings
-   */
-  async getOwnerParkings() {
-    const response = await fetch(`${API_BASE_URL}/owner/parkings`, {
-      credentials: 'include'
+  createOwnerParking(parkingData) {
+    return request("/owner/parkings", {
+      method: "POST",
+      body: parkingData,
     });
-    return handleResponse(response);
   },
 
-  /**
-   * Créer un parking (Owner)
-   * Doc: POST /api/owner/parkings
-   */
-  async createOwnerParking(parkingData) {
-    const response = await fetch(`${API_BASE_URL}/owner/parkings`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(parkingData),
-      credentials: 'include'
-    });
-    return handleResponse(response);
+  getOwnerParkingReservations(id, { from, to } = {}) {
+    return request(
+      withQuery(`/owner/parkings/${id}/reservations`, { from, to }),
+      { method: "GET" }
+    );
   },
 
-  /**
-   * Réservations d'un parking (Owner)
-   * Doc: GET /api/owner/parkings/{id}/reservations
-   */
-  async getOwnerParkingReservations(id) {
-    const response = await fetch(`${API_BASE_URL}/owner/parkings/${id}/reservations`, {
-      credentials: 'include'
-    });
-    return handleResponse(response);
+  getOwnerActiveStationnements(id) {
+    return request(`/owner/parkings/${id}/stationnements/active`, { method: "GET" });
   },
 
-  /**
-   * Stationnements actifs (Owner)
-   * Doc: GET /api/owner/parkings/{id}/stationnements/active
-   */
-  async getOwnerActiveParkings(id) {
-    const response = await fetch(`${API_BASE_URL}/owner/parkings/${id}/stationnements/active`, {
-      credentials: 'include'
-    });
-    return handleResponse(response);
+  getOwnerMonthlyRevenue(id, month /* YYYY-MM */) {
+    return request(withQuery(`/owner/parkings/${id}/revenue`, { month }), { method: "GET" });
   },
-
-  /**
-   * Revenus (Owner)
-   * Doc: GET /api/owner/parkings/{id}/revenue?month=YYYY-MM
-   */
-  async getOwnerRevenue(id, month) {
-    const response = await fetch(`${API_BASE_URL}/owner/parkings/${id}/revenue?month=${month}`, {
-      credentials: 'include'
-    });
-    return handleResponse(response);
-  }
 };

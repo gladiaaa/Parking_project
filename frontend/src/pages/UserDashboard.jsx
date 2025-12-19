@@ -13,37 +13,37 @@ export default function UserDashboard() {
   const userStr = localStorage.getItem("user");
   const user = userStr ? JSON.parse(userStr) : null;
 
-  useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (!token) {
-      navigate("/login");
-      return;
-    }
-
-    loadData();
-  }, [navigate]);
-
-  const loadData = async () => {
-    const token = localStorage.getItem("token");
-    setLoading(true);
-    setError("");
-
+useEffect(() => {
+  (async () => {
     try {
-      const reservationsResult = await apiService.getReservations(token);
-      if (reservationsResult.success) {
-        const allReservations = reservationsResult.reservations || [];
-        setReservations(allReservations);
-
-        // Derive active stationnements (Entré mais pas encore sorti)
-        const active = allReservations.filter(r => r.date_entree && !r.date_sortie);
-        setStationnements(active);
-      }
-    } catch (err) {
-      setError(err.message || "Erreur lors du chargement des données");
-    } finally {
-      setLoading(false);
+      // Vérifie session via cookie
+      const meRes = await apiService.me();
+      const user = meRes?.user || meRes;
+      localStorage.setItem("user", JSON.stringify(user));
+      await loadData();
+    } catch {
+      navigate("/login");
     }
-  };
+  })();
+}, [navigate]);
+
+const loadData = async () => {
+  setLoading(true);
+  setError("");
+
+  try {
+    const reservationsResult = await apiService.getMyReservations();
+    const allReservations = reservationsResult?.reservations || reservationsResult?.data || [];
+    setReservations(allReservations);
+
+    const active = allReservations.filter((r) => r.date_entree && !r.date_sortie);
+    setStationnements(active);
+  } catch (err) {
+    setError(err.message || "Erreur lors du chargement des données");
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">

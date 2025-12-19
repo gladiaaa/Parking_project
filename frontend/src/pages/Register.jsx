@@ -3,98 +3,98 @@ import { useNavigate, Link } from "react-router-dom";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
 import { apiService } from "../services/apiService";
+import { notifyAuthChanged } from "../services/authStore";
 
 export default function Register() {
   const navigate = useNavigate();
+
   const [form, setForm] = useState({
     firstname: "",
     lastname: "",
     email: "",
     password: "",
-    role: "user",
+    role: "user", // UI: "user" | "owner"
   });
+
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleChange = (e) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    setForm((p) => ({ ...p, [name]: value }));
+  };
+
+  const validate = () => {
+    if (!form.firstname || !form.lastname || !form.email || !form.password) {
+      return "Veuillez remplir tous les champs";
+    }
+    if (form.firstname.trim().length < 2) {
+      return "Le prénom doit contenir au moins 2 caractères";
+    }
+    if (form.lastname.trim().length < 2) {
+      return "Le nom doit contenir au moins 2 caractères";
+    }
+    // input type="email" aide déjà, mais on garde une validation simple
+    if (!form.email.includes("@") || !form.email.includes(".")) {
+      return "Veuillez entrer une adresse email valide";
+    }
+    if (form.password.length < 6) {
+      return "Le mot de passe doit contenir au moins 6 caractères";
+    }
+    if (!form.role) {
+      return "Veuillez sélectionner un type de compte";
+    }
+    return null;
+  };
+
+  const redirectByRole = (mePayload) => {
+    // selon ton backend, /me peut renvoyer {id,email,role} ou {user:{...}}
+    const rawRole = (mePayload?.role ?? mePayload?.user?.role ?? "").toString();
+    const role = rawRole.toUpperCase();
+
+    navigate(role === "OWNER" ? "/dashboard-owner" : "/dashboard-user", {
+      replace: true,
+    });
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
     setSuccess("");
-    
-    // Validations côté client
-    if (!form.firstname || !form.lastname || !form.email || !form.password) {
-      setError("Veuillez remplir tous les champs");
+
+    const validationError = validate();
+    if (validationError) {
+      setError(validationError);
       return;
     }
-    
-    if (form.firstname.length < 2) {
-      setError("Le prénom doit contenir au moins 2 caractères");
-      return;
-    }
-    
-    if (form.lastname.length < 2) {
-      setError("Le nom doit contenir au moins 2 caractères");
-      return;
-    }
-    
-    if (!form.email.includes('@') || !form.email.includes('.')) {
-      setError("Veuillez entrer une adresse email valide");
-      return;
-    }
-    
-    if (form.password.length < 6) {
-      setError("Le mot de passe doit contenir au moins 6 caractères");
-      return;
-    }
-    
-    if (!form.role) {
-      setError("Veuillez sélectionner un type de compte");
-      return;
-    }
-    
+
     setLoading(true);
 
     try {
-      // Préparer les données
       const userData = {
         firstname: form.firstname.trim(),
         lastname: form.lastname.trim(),
         email: form.email.trim().toLowerCase(),
         password: form.password,
-        role: form.role
+        // ✅ Backend/BDD attend "USER" | "OWNER" | "ADMIN"
+        role: (form.role || "user").toUpperCase(),
       };
-      
-      const result = await apiService.register(userData);
-      
-      if (result.success && result.token && result.user) {
-        // Sauvegarder dans localStorage
-        localStorage.setItem("token", result.token);
-        localStorage.setItem("user", JSON.stringify(result.user));
-        
-        console.log('✅ Token sauvegardé:', result.token);
-        console.log('✅ Utilisateur sauvegardé:', result.user);
-        
-        setSuccess("✅ Compte créé avec succès ! Redirection en cours...");
-        
-        // Redirection selon le rôle
-        setTimeout(() => {
-          if (result.user.role === 'owner') {
-            navigate("/dashboard-owner", { replace: true });
-          } else {
-            navigate("/dashboard-user", { replace: true });
-          }
-        }, 1500);
-      } else {
-        setError("Erreur lors de la création du compte. Veuillez réessayer.");
-      }
+
+      // ✅ Register (JWT cookie via credentials: include dans apiService)
+      await apiService.register(userData);
+
+      // ✅ Source de vérité: /me (pas de token/localStorage)
+      const me = await apiService.me();
+
+      setSuccess("✅ Compte créé avec succès ! Redirection en cours...");
+
+      setTimeout(() => {
+        redirectByRole(me);
+      }, 800);
     } catch (err) {
-      console.error('Erreur inscription:', err);
-      setError(err.message || "Erreur lors de l'inscription. Veuillez réessayer.");
+      console.error("Erreur inscription:", err);
+      setError(err?.message || "Erreur lors de l'inscription. Veuillez réessayer.");
     } finally {
       setLoading(false);
     }
@@ -186,11 +186,13 @@ export default function Register() {
                   Je m'inscris en tant que
                 </label>
                 <div className="grid grid-cols-2 gap-4">
-                  <label className={`cursor-pointer rounded-2xl border-2 p-5 transition-all duration-300 ${
-                    form.role === "user" 
-                      ? 'border-gray-900 bg-gray-900 text-white shadow-lg' 
-                      : 'border-gray-200 bg-gray-50 hover:border-gray-300 hover:bg-white'
-                  }`}>
+                  <label
+                    className={`cursor-pointer rounded-2xl border-2 p-5 transition-all duration-300 ${
+                      form.role === "user"
+                        ? "border-gray-900 bg-gray-900 text-white shadow-lg"
+                        : "border-gray-200 bg-gray-50 hover:border-gray-300 hover:bg-white"
+                    }`}
+                  >
                     <input
                       type="radio"
                       name="role"
@@ -201,20 +203,32 @@ export default function Register() {
                       required
                     />
                     <div className="text-center">
-                      <div className={`font-medium mb-2 ${form.role === "user" ? 'text-white' : 'text-gray-900'}`}>
+                      <div
+                        className={`font-medium mb-2 ${
+                          form.role === "user" ? "text-white" : "text-gray-900"
+                        }`}
+                      >
                         Utilisateur
                       </div>
-                      <div className={`text-xs ${form.role === "user" ? 'text-white/80' : 'text-gray-500'} font-light`}>
+                      <div
+                        className={`text-xs ${
+                          form.role === "user"
+                            ? "text-white/80"
+                            : "text-gray-500"
+                        } font-light`}
+                      >
                         Je cherche un parking
                       </div>
                     </div>
                   </label>
-                  
-                  <label className={`cursor-pointer rounded-2xl border-2 p-5 transition-all duration-300 ${
-                    form.role === "owner" 
-                      ? 'border-gray-900 bg-gray-900 text-white shadow-lg' 
-                      : 'border-gray-200 bg-gray-50 hover:border-gray-300 hover:bg-white'
-                  }`}>
+
+                  <label
+                    className={`cursor-pointer rounded-2xl border-2 p-5 transition-all duration-300 ${
+                      form.role === "owner"
+                        ? "border-gray-900 bg-gray-900 text-white shadow-lg"
+                        : "border-gray-200 bg-gray-50 hover:border-gray-300 hover:bg-white"
+                    }`}
+                  >
                     <input
                       type="radio"
                       name="role"
@@ -225,10 +239,20 @@ export default function Register() {
                       required
                     />
                     <div className="text-center">
-                      <div className={`font-medium mb-2 ${form.role === "owner" ? 'text-white' : 'text-gray-900'}`}>
+                      <div
+                        className={`font-medium mb-2 ${
+                          form.role === "owner" ? "text-white" : "text-gray-900"
+                        }`}
+                      >
                         Propriétaire
                       </div>
-                      <div className={`text-xs ${form.role === "owner" ? 'text-white/80' : 'text-gray-500'} font-light`}>
+                      <div
+                        className={`text-xs ${
+                          form.role === "owner"
+                            ? "text-white/80"
+                            : "text-gray-500"
+                        } font-light`}
+                      >
                         Je loue mon parking
                       </div>
                     </div>
