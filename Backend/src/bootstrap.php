@@ -61,7 +61,7 @@ use App\UseCase\Owner\GetMonthlyRevenueForOwner;
 $dotenv = Dotenv::createImmutable(__DIR__ . '/..');
 $dotenv->load();
 
-define('APP_ROOT', realpath(__DIR__ . '/..'));        // => D:\...\Backend
+define('APP_ROOT', realpath(__DIR__ . '/..'));       
 define('STORAGE_DIR', APP_ROOT . DIRECTORY_SEPARATOR . 'var' . DIRECTORY_SEPARATOR . 'storage');
 
 // =====================
