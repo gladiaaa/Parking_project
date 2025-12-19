@@ -3,6 +3,23 @@ import { Link, useNavigate } from "react-router-dom";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
 import LoadingScreen from "../components/LoadingScreen";
+import { 
+  MapPin, 
+  Car, 
+  Calendar, 
+  Search, 
+  Smartphone, 
+  Play, 
+  Star, 
+  SquareParking, 
+  Lock, 
+  Clock, 
+  CheckCircle, 
+  ShieldCheck, 
+  Zap, 
+  Map as MapIcon, 
+  ChevronRight 
+} from 'lucide-react';
 
 export default function Home() {
   const navigate = useNavigate();
@@ -63,7 +80,9 @@ export default function Home() {
                   <form onSubmit={handleSearchSubmit} className="space-y-3">
                     {/* Où */}
                     <div className="relative">
-                      <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-lg">📍</span>
+                      <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">
+                        <MapPin className="w-5 h-5" />
+                      </div>
                       <input
                         type="text"
                         placeholder="Où cherchez-vous un parking ?"
@@ -75,7 +94,9 @@ export default function Home() {
 
                     {/* Type de véhicule */}
                     <div className="relative">
-                      <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-lg">🚗</span>
+                      <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">
+                        <Car className="w-5 h-5" />
+                      </div>
                       <select
                         value={searchForm.vehicule}
                         onChange={(e) => setSearchForm({ ...searchForm, vehicule: e.target.value })}
@@ -91,7 +112,9 @@ export default function Home() {
                     {/* Dates */}
                     <div className="grid grid-cols-2 gap-2">
                       <div className="relative">
-                        <span className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400 text-base z-10">📅</span>
+                        <div className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400 z-10">
+                          <Calendar className="w-4 h-4" />
+                        </div>
                         <input
                           type="datetime-local"
                           value={searchForm.dateDebut}
@@ -100,7 +123,9 @@ export default function Home() {
                         />
                       </div>
                       <div className="relative">
-                        <span className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400 text-base z-10">📅</span>
+                        <div className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400 z-10">
+                          <Calendar className="w-4 h-4" />
+                        </div>
                         <input
                           type="datetime-local"
                           value={searchForm.dateFin}
@@ -108,7 +133,7 @@ export default function Home() {
                           className="w-full pl-8 pr-2 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-gray-800 text-xs"
                         />
                       </div>
-            </div>
+                    </div>
 
                     {/* Bouton rechercher */}
                     <button
@@ -124,7 +149,7 @@ export default function Home() {
                 <div className="flex gap-2">
                   <a href="#" className="inline-block">
                     <div className="bg-black text-white px-3 py-2 rounded-lg flex items-center gap-2 hover:bg-gray-800 transition">
-                      <span className="text-xl">🍎</span>
+                      <Smartphone className="w-6 h-6" />
                       <div className="text-left">
                         <p className="text-xs leading-tight">Télécharger dans</p>
                         <p className="text-xs font-semibold">l'App Store</p>
@@ -133,7 +158,7 @@ export default function Home() {
                   </a>
                   <a href="#" className="inline-block">
                     <div className="bg-black text-white px-3 py-2 rounded-lg flex items-center gap-2 hover:bg-gray-800 transition">
-                      <span className="text-xl">▶️</span>
+                      <Play className="w-6 h-6 fill-current" />
                       <div className="text-left">
                         <p className="text-xs leading-tight">Disponible sur</p>
                         <p className="text-xs font-semibold">Google Play</p>
@@ -145,11 +170,11 @@ export default function Home() {
                 {/* Trustpilot */}
                 <div className="flex items-center gap-1 flex-wrap text-xs">
                   <div className="flex gap-0.5">
-                    <span className="text-green-400 text-xs">⭐</span>
-                    <span className="text-green-400 text-xs">⭐</span>
-                    <span className="text-green-400 text-xs">⭐</span>
-                    <span className="text-green-400 text-xs">⭐</span>
-                    <span className="text-green-400 text-xs">⭐</span>
+                    <Star className="w-3 h-3 text-green-400 fill-current" />
+                    <Star className="w-3 h-3 text-green-400 fill-current" />
+                    <Star className="w-3 h-3 text-green-400 fill-current" />
+                    <Star className="w-3 h-3 text-green-400 fill-current" />
+                    <Star className="w-3 h-3 text-green-400 fill-current" />
                   </div>
                   <span className="text-white/90">Trustpilot</span>
                   <span className="text-white font-semibold">Excellent 4,3/5</span>
@@ -168,7 +193,7 @@ export default function Home() {
                 </div>
                 {/* Bouton play vidéo */}
                 <button className="absolute bottom-4 right-4 bg-white text-primary px-4 py-2 rounded-full shadow-xl hover:bg-gray-100 transition flex items-center gap-2 text-sm">
-                  <span>▶️</span>
+                  <Play className="w-4 h-4 fill-current" />
                   <span className="font-light">Voir la vidéo</span>
                 </button>
               </div>
@@ -189,19 +214,19 @@ export default function Home() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-12 max-w-6xl mx-auto">
               <div className="flex flex-col items-center gap-3 text-center group cursor-pointer">
                 <div className="w-16 h-16 bg-gradient-to-br from-primary/10 to-primary/5 rounded-2xl flex items-center justify-center transition-all duration-500 group-hover:scale-125 group-hover:rotate-6 group-hover:shadow-lg">
-                  <span className="text-3xl group-hover:scale-110 transition-transform duration-300">🅿️</span>
+                  <SquareParking className="w-8 h-8 text-primary group-hover:scale-110 transition-transform duration-300" />
                 </div>
                 <h3 className="font-light text-gray-800 text-lg group-hover:text-primary transition-colors">Stationnement dédié</h3>
               </div>
               <div className="flex flex-col items-center gap-3 text-center group cursor-pointer">
                 <div className="w-16 h-16 bg-gradient-to-br from-primary/10 to-primary/5 rounded-2xl flex items-center justify-center transition-all duration-500 group-hover:scale-125 group-hover:-rotate-6 group-hover:shadow-lg">
-                  <span className="text-3xl group-hover:scale-110 transition-transform duration-300">🔒</span>
+                  <Lock className="w-8 h-8 text-primary group-hover:scale-110 transition-transform duration-300" />
                 </div>
                 <h3 className="font-light text-gray-800 text-lg group-hover:text-primary transition-colors">Parking privé</h3>
               </div>
               <div className="flex flex-col items-center gap-3 text-center group cursor-pointer">
                 <div className="w-16 h-16 bg-gradient-to-br from-primary/10 to-primary/5 rounded-2xl flex items-center justify-center transition-all duration-500 group-hover:scale-125 group-hover:rotate-6 group-hover:shadow-lg">
-                  <span className="text-3xl group-hover:scale-110 transition-transform duration-300">📅</span>
+                  <Calendar className="w-8 h-8 text-primary group-hover:scale-110 transition-transform duration-300" />
                 </div>
                 <h3 className="font-light text-gray-800 text-lg group-hover:text-primary transition-colors">Réservez à l'avance</h3>
               </div>

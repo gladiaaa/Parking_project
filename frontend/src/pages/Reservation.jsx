@@ -3,6 +3,22 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { apiService } from '../services/apiService';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
+import { 
+  MapPin, 
+  Search, 
+  Calendar, 
+  Car, 
+  Bike, 
+  Zap, 
+  List, 
+  Map, 
+  Star, 
+  X, 
+  CheckCircle, 
+  AlertCircle,
+  CreditCard,
+  SquareParking
+} from 'lucide-react';
 
 const Reservation = () => {
   const navigate = useNavigate();
@@ -135,7 +151,7 @@ const Reservation = () => {
                     <div className="flex gap-2 mb-3">
                         <div className="relative flex-1">
                             <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
-                                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                                <Search className="w-5 h-5 text-gray-400" />
                             </div>
                             <input 
                                 type="text" 
@@ -154,7 +170,7 @@ const Reservation = () => {
                     <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
                          {/* Date Picker Button */}
                          <div className="flex items-center gap-2 bg-white border border-gray-200 px-3 py-2 rounded-full text-sm font-medium text-gray-700 cursor-pointer hover:border-black transition-colors whitespace-nowrap group relative">
-                            <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                            <Calendar className="w-4 h-4 text-gray-500" />
                             <span>Dates</span>
                             {/* Date Inputs Popup (Simplified for demo) */}
                             <div className="absolute top-full left-0 mt-2 p-4 bg-white shadow-xl rounded-xl border border-gray-100 hidden group-hover:block min-w-[300px] z-50">
@@ -177,9 +193,9 @@ const Reservation = () => {
                             onChange={(e) => setSearchParams({ ...searchParams, vehicule: e.target.value })}
                             className="bg-white border border-gray-200 px-3 py-2 rounded-full text-sm font-medium text-gray-700 cursor-pointer hover:border-black transition-colors outline-none appearance-none"
                         >
-                            <option value="Voiture">🚗 Voiture</option>
-                            <option value="Moto">🏍️ Moto</option>
-                            <option value="Vélo">🚲 Vélo</option>
+                            <option value="Voiture">Voiture</option>
+                            <option value="Moto">Moto</option>
+                            <option value="Vélo">Vélo</option>
                         </select>
 
                         {servicesDisponibles.slice(0, 3).map(service => (
@@ -233,8 +249,8 @@ const Reservation = () => {
             <div className={`flex-1 bg-gray-200 relative ${viewMode === 'list' ? 'hidden lg:block' : 'block'}`}>
                 {/* Placeholder Carte Type Google Maps */}
                 <div className="absolute inset-0 bg-[#e5e7eb] flex items-center justify-center overflow-hidden">
-                    <div className="text-center opacity-30 select-none pointer-events-none">
-                        <div className="text-9xl mb-4">🗺️</div>
+                    <div className="text-center opacity-30 select-none pointer-events-none flex flex-col items-center">
+                        <Map className="w-32 h-32 mb-4 text-gray-400" />
                         <p className="text-3xl font-bold text-gray-400">Carte Interactive</p>
                     </div>
                     {/* Fake Map Pins */}
@@ -253,7 +269,7 @@ const Reservation = () => {
                     className="lg:hidden absolute bottom-6 left-1/2 transform -translate-x-1/2 bg-black text-white px-6 py-3 rounded-full shadow-xl font-bold z-50 flex items-center gap-2"
                     onClick={() => setViewMode(viewMode === 'list' ? 'map' : 'list')}
                 >
-                    {viewMode === 'list' ? '🗺️ Carte' : '📋 Liste'}
+                    {viewMode === 'list' ? <><Map className="w-5 h-5" /> Carte</> : <><List className="w-5 h-5" /> Liste</>}
                 </button>
             </div>
         </div>
@@ -286,7 +302,7 @@ const ParkingCard = ({ parking, price, onBook }) => {
         <div className="bg-white border border-gray-200 rounded-xl p-4 hover:shadow-lg transition-all duration-200 cursor-pointer group flex gap-4">
             {/* Image */}
             <div className="w-32 h-32 bg-gray-100 rounded-lg flex-shrink-0 relative overflow-hidden">
-                <div className="absolute inset-0 flex items-center justify-center text-4xl">🅿️</div>
+                <div className="absolute inset-0 flex items-center justify-center"><SquareParking className="w-16 h-16 text-gray-300" /></div>
                 {parking.note >= 4.5 && (
                     <div className="absolute top-2 left-2 bg-primary text-white text-[10px] font-bold px-2 py-0.5 rounded-sm uppercase tracking-wide">
                         Coup de cœur
@@ -300,7 +316,7 @@ const ParkingCard = ({ parking, price, onBook }) => {
                     <div className="flex justify-between items-start">
                         <h3 className="font-bold text-lg text-gray-900 leading-tight mb-1">{parking.nom}</h3>
                         <div className="flex items-center gap-1 bg-gray-50 px-1.5 py-0.5 rounded text-xs font-bold text-gray-900">
-                            <span>★</span> {parking.note}
+                            <Star className="w-3 h-3 fill-current" /> {parking.note}
                         </div>
                     </div>
                     <p className="text-gray-500 text-sm mb-2 truncate">{parking.adresse}</p>
@@ -352,18 +368,18 @@ const BookingModal = ({ parking, searchParams, price, onClose, onSuccess }) => {
     const now = new Date();
     
     if (debut < now) {
-      alert('❌ La date de début ne peut pas être dans le passé');
+      alert('La date de début ne peut pas être dans le passé');
       return;
     }
     
     if (fin <= debut) {
-      alert('❌ La date de fin doit être après la date de début');
+      alert('La date de fin doit être après la date de début');
       return;
     }
     
     const diffMinutes = (fin - debut) / (1000 * 60);
     if (diffMinutes < 30) {
-      alert('❌ Durée minimum: 30 minutes');
+      alert('Durée minimum: 30 minutes');
       return;
     }
     
@@ -379,11 +395,11 @@ const BookingModal = ({ parking, searchParams, price, onClose, onSuccess }) => {
       });
 
       if (response.success) {
-        alert(`✅ ${response.message}\n\n💰 ${response.reservation.montant}€`);
+        alert(`${response.message}\n\nMontant: ${response.reservation.montant}€`);
         onSuccess();
       }
     } catch (error) {
-      alert('❌ ' + error.message);
+      alert(error.message);
     } finally {
       setLoading(false);
     }
@@ -398,14 +414,14 @@ const BookingModal = ({ parking, searchParams, price, onClose, onSuccess }) => {
             onClick={onClose}
             className="w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors flex items-center justify-center text-gray-600"
           >
-            ✕
+            <X className="w-5 h-5" />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="p-8">
           <div className="bg-gray-50 rounded-2xl p-6 mb-8">
             <h3 className="text-xl font-extralight text-gray-900 mb-2">{parking.nom}</h3>
-            <p className="text-gray-500 font-light mb-4">📍 {parking.adresse}</p>
+            <p className="text-gray-500 font-light mb-4 flex items-center gap-1"><MapPin className="w-4 h-4" /> {parking.adresse}</p>
             <div className="flex items-center justify-between pt-4 border-t border-gray-200">
               <span className="text-gray-500 font-light">Total</span>
               <span className="text-3xl font-extralight text-gray-900">{price}€</span>

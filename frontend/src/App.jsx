@@ -9,6 +9,7 @@ import Maps from "./pages/Maps.jsx";
 import UserDashboard from "./pages/UserDashboard.jsx";
 import OwnerDashboard from "./pages/OwnerDashboard.jsx";
 import ParkingDetails from "./pages/ParkingDetails.jsx";
+import Subscription from "./pages/Subscription.jsx";
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
 
 function App() {
@@ -23,6 +24,14 @@ function App() {
         <Route path="/maps" element={<Maps />} />
         
         {/* Routes protégées */}
+        <Route
+          path="/abonnement"
+          element={
+            <ProtectedRoute>
+              <Subscription />
+            </ProtectedRoute>
+          }
+        />
         <Route
           path="/mes-reservations"
           element={

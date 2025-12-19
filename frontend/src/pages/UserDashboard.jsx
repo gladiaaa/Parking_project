@@ -31,12 +31,12 @@ export default function UserDashboard() {
     try {
       const reservationsResult = await apiService.getReservations(token);
       if (reservationsResult.success) {
-        setReservations(reservationsResult.reservations || []);
-      }
+        const allReservations = reservationsResult.reservations || [];
+        setReservations(allReservations);
 
-      const stationnementsResult = await apiService.getStationnements(token);
-      if (stationnementsResult.success) {
-        setStationnements(stationnementsResult.stationnements || []);
+        // Derive active stationnements (Entré mais pas encore sorti)
+        const active = allReservations.filter(r => r.date_entree && !r.date_sortie);
+        setStationnements(active);
       }
     } catch (err) {
       setError(err.message || "Erreur lors du chargement des données");

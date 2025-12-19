@@ -21,9 +21,22 @@ use App\Controller\ReservationController;
 use App\Infrastructure\Repository\UserRepository;
 
 // Headers CORS
-header('Access-Control-Allow-Origin: *');
+$origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+$allowed_origins = [
+    'http://localhost:3000',
+    'http://localhost:4000',
+    'http://localhost:5173'
+];
+
+if (in_array($origin, $allowed_origins)) {
+    header("Access-Control-Allow-Origin: $origin");
+} else {
+    header('Access-Control-Allow-Origin: *'); // Fallback (or remove if strict)
+}
+
+header('Access-Control-Allow-Credentials: true');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
 header('Content-Type: application/json; charset=utf-8');
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -34,17 +47,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 // Helper pour envoyer la réponse
 function sendResponse(array $response): void {
     http_response_code($response['status']);
+    
+    // Hack: Set cookie if token is present (pour supporter l'auth cookie sans toucher au reste)
+    if (isset($response['data']['token'])) {
+        setcookie('auth_token', $response['data']['token'], [
+            'expires' => time() + 86400,
+            'path' => '/',
+            'domain' => 'localhost',
+            'secure' => false, // false en local
+            'httponly' => true,
+            'samesite' => 'Lax'
+        ]);
+    }
+
     echo json_encode($response['data']);
     exit;
 }
 
 // Helper Auth (Extraction du token)
 function getAuthUser(): ?array {
-    $headers = getallheaders();
-    $auth = $headers['Authorization'] ?? $headers['authorization'] ?? '';
-    if (preg_match('/Bearer\s+(.*)$/i', $auth, $matches)) {
+    $token = null;
+
+    // 1. Essayer via le cookie (prioritaire pour le front)
+    if (isset($_COOKIE['auth_token'])) {
+        $token = $_COOKIE['auth_token'];
+    }
+
+    // 2. Fallback via Authorization header
+    if (!$token) {
+        $headers = getallheaders();
+        $auth = $headers['Authorization'] ?? $headers['authorization'] ?? '';
+        if (preg_match('/Bearer\s+(.*)$/i', $auth, $matches)) {
+            $token = $matches[1];
+        }
+    }
+
+    if ($token) {
         $repo = new UserRepository();
-        return $repo->findByToken($matches[1]);
+        return $repo->findByToken($token);
     }
     return null;
 }
