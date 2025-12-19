@@ -1,22 +1,13 @@
-import React, { useEffect, useState } from "react";
+import React from "react";
 import { Navigate } from "react-router-dom";
-import { apiService } from "../services/apiService";
 
 export default function ProtectedRoute({ children }) {
-  const [allowed, setAllowed] = useState(null);
+  const token = localStorage.getItem("token");
 
-  useEffect(() => {
-    apiService
-      .getCurrentUser()
-      .then((user) => {
-        if (user) setAllowed(true);
-        else setAllowed(false);
-      })
-      .catch(() => setAllowed(false));
-  }, []);
-
-  if (allowed === null) return <div>Chargement...</div>;
-  if (!allowed) return <Navigate to="/login" />;
+  if (!token) {
+    return <Navigate to="/login" replace />;
+  }
 
   return children;
 }
+

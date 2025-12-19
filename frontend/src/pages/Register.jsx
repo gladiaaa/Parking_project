@@ -21,10 +21,10 @@ export default function Register() {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
-const handleSubmit = async (e) => {
-  e.preventDefault();
-  setError("");
-  setSuccess("");
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
+    setSuccess("");
     
     // Validations côté client
     if (!form.firstname || !form.lastname || !form.email || !form.password) {
@@ -57,11 +57,11 @@ const handleSubmit = async (e) => {
       return;
     }
     
-  setLoading(true);
+    setLoading(true);
 
-  try {
+    try {
       // Préparer les données
-    const userData = {
+      const userData = {
         firstname: form.firstname.trim(),
         lastname: form.lastname.trim(),
         email: form.email.trim().toLowerCase(),
@@ -70,35 +70,35 @@ const handleSubmit = async (e) => {
       };
       
       const result = await apiService.register(userData);
-
-    if (result.success && result.token && result.user) {
+      
+      if (result.success && result.token && result.user) {
         // Sauvegarder dans localStorage
-      // PLUS DE TOKEN, on stocke juste le user
-      localStorage.setItem("user", JSON.stringify(result.user));
-
+        localStorage.setItem("token", result.token);
+        localStorage.setItem("user", JSON.stringify(result.user));
+        
         console.log('✅ Token sauvegardé:', result.token);
         console.log('✅ Utilisateur sauvegardé:', result.user);
         
-      setSuccess("✅ Compte créé avec succès ! Redirection en cours...");
+        setSuccess("✅ Compte créé avec succès ! Redirection en cours...");
         
         // Redirection selon le rôle
-      setTimeout(() => {
-        if (result.user.role === "owner") {
-          navigate("/dashboard-owner", { replace: true });
-        } else {
-          navigate("/dashboard-user", { replace: true });
-        }
-      }, 1500);
+        setTimeout(() => {
+          if (result.user.role === 'owner') {
+            navigate("/dashboard-owner", { replace: true });
+          } else {
+            navigate("/dashboard-user", { replace: true });
+          }
+        }, 1500);
       } else {
         setError("Erreur lors de la création du compte. Veuillez réessayer.");
       }
-  } catch (err) {
+    } catch (err) {
       console.error('Erreur inscription:', err);
-    setError(err.message || "Erreur lors de l'inscription. Veuillez réessayer.");
-  } finally {
-    setLoading(false);
-  }
-};
+      setError(err.message || "Erreur lors de l'inscription. Veuillez réessayer.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-gray-50 to-white">

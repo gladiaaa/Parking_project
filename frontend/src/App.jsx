@@ -9,6 +9,7 @@ import Maps from "./pages/Maps.jsx";
 import UserDashboard from "./pages/UserDashboard.jsx";
 import OwnerDashboard from "./pages/OwnerDashboard.jsx";
 import ParkingDetails from "./pages/ParkingDetails.jsx";
+import Subscription from "./pages/Subscription.jsx";
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
 
 function App() {
@@ -24,6 +25,14 @@ function App() {
         
         {/* Routes protégées */}
         <Route
+          path="/abonnement"
+          element={
+            <ProtectedRoute>
+              <Subscription />
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/mes-reservations"
           element={
             <ProtectedRoute>
@@ -34,7 +43,7 @@ function App() {
         <Route
           path="/dashboard-user"
           element={
-            <ProtectedRoute role="user">
+            <ProtectedRoute>
               <UserDashboard />
             </ProtectedRoute>
           }
@@ -42,19 +51,19 @@ function App() {
         <Route
           path="/dashboard-owner"
           element={
-            <ProtectedRoute role="owner">
+            <ProtectedRoute>
               <OwnerDashboard />
             </ProtectedRoute>
           }
         />
-
+        
         {/* Route publique pour les détails de parking */}
         <Route path="/parking/:id" element={<ParkingDetails />} />
-
+        
         {/* Redirection pour les routes obsolètes */}
         <Route path="/dashboard" element={<Navigate to="/dashboard-user" replace />} />
         <Route path="/owner" element={<Navigate to="/dashboard-owner" replace />} />
-
+        
         {/* Route 404 */}
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>

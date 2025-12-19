@@ -1,17 +1,15 @@
-// frontend/src/pages/Login.jsx
 import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { apiService } from "../services/apiService";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
+import { apiService } from "../services/apiService";
 
 export default function Login() {
-  const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -36,14 +34,26 @@ export default function Login() {
     setLoading(true);
 
     try {
-      const result = await apiService.login(email, password);
-
-      if (result.success) {
-        // ❌ remove localStorage
-        // localStorage.setItem("user", JSON.stringify(result.user));
-
-        if (result.user.role === "owner") {
-          navigate("/dashboard-owner");
+      // Normaliser l'email
+      const normalizedEmail = email.trim().toLowerCase();
+      
+      // Debug: vérifier localStorage avant connexion
+      const storedUsers = localStorage.getItem('mockUsers');
+      console.log('📦 Utilisateurs dans localStorage:', storedUsers ? JSON.parse(storedUsers) : 'Aucun');
+      
+      const result = await apiService.login(normalizedEmail, password);
+      
+      if (result.success && result.token && result.user) {
+        // Sauvegarder dans localStorage
+        localStorage.setItem("token", result.token);
+        localStorage.setItem("user", JSON.stringify(result.user));
+        
+        console.log('✅ Token sauvegardé:', result.token);
+        console.log('✅ Utilisateur sauvegardé:', result.user);
+        
+        // Redirection selon le rôle
+        if (result.user.role === 'owner') {
+          navigate("/dashboard-owner", { replace: true });
         } else {
           navigate("/dashboard-user", { replace: true });
         }

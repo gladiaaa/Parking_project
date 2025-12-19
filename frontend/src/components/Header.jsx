@@ -1,26 +1,18 @@
 import React from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { apiService } from "../services/apiService";
 
 export default function Header() {
   const navigate = useNavigate();
+  const token = localStorage.getItem("token");
   const userStr = localStorage.getItem("user");
   const user = userStr ? JSON.parse(userStr) : null;
-  const userRole = user?.role?.toLowerCase()?.trim() || null;
+  const userRole = user?.role || null;
 
-  const isLoggedIn = !!user;
-
-  const handleLogout = async () => {
-    try {
-      await apiService.logout();
-    } catch (e) {
-      console.error("Erreur lors de la déconnexion :", e);
-    }
+  const handleLogout = () => {
+    localStorage.removeItem("token");
     localStorage.removeItem("user");
     navigate("/");
   };
-
-
 
   return (
     <header className="fixed top-6 left-0 right-0 z-50 px-6">
@@ -34,8 +26,8 @@ export default function Header() {
 
         {/* Navigation centrale - Arrondie et séparée */}
         <nav className="flex items-center bg-gray-900 rounded-full shadow-2xl px-2 py-2">
-          <Link
-            to="/"
+          <Link 
+            to="/" 
             className="px-6 py-2.5 bg-white text-gray-900 rounded-full font-medium text-sm transition-all duration-300 hover:bg-gray-100"
           >
             Accueil
@@ -45,6 +37,12 @@ export default function Header() {
             className="px-6 py-2.5 text-white font-light text-sm transition-all duration-300 hover:text-gray-300"
           >
             Réserver
+          </Link>
+          <Link 
+            to="/abonnement" 
+            className="px-6 py-2.5 text-white font-light text-sm transition-all duration-300 hover:text-gray-300"
+          >
+            Abonnement
           </Link>
           <Link 
             to="/maps" 
@@ -62,8 +60,8 @@ export default function Header() {
           >
             Services
           </a>
-          <a
-            href="#tarifs"
+          <a 
+            href="#tarifs" 
             onClick={(e) => {
               e.preventDefault();
               document.querySelector('#tarifs')?.scrollIntoView({ behavior: 'smooth' });
@@ -75,12 +73,12 @@ export default function Header() {
         </nav>
 
         {/* Boutons Connexion/Inscription ou Dashboard */}
-        {isLoggedIn ? (
+        {token ? (
           <div className="flex items-center gap-3">
-            {userRole === "owner" ? (
-              <Link
-                to="/dashboard-owner"
-                className="bg-gray-900 text-white px-6 py-2.5 rounded-full text-sm shadow-lg hover:bg-gray-800 transition-all duration-300"
+            {userRole === 'owner' ? (
+              <Link 
+                to="/dashboard-owner" 
+                className="bg-gray-900 text-white px-6 py-2.5 rounded-full font-light text-sm shadow-lg hover:bg-gray-800 transition-all duration-300"
               >
                 Dashboard
               </Link>
@@ -102,7 +100,7 @@ export default function Header() {
             )}
             <button
               onClick={handleLogout}
-              className="bg-white text-gray-900 px-5 py-2.5 rounded-full text-sm shadow-lg hover:bg-gray-100 transition-all duration-300"
+              className="bg-primary text-white px-6 py-2.5 rounded-full font-light text-sm shadow-lg hover:bg-primary-800 transition-all duration-300"
             >
               Déconnexion
             </button>
@@ -111,19 +109,18 @@ export default function Header() {
           <div className="flex items-center gap-3">
             <Link
               to="/login"
-              className="bg-white text-gray-900 px-5 py-2.5 rounded-full text-sm shadow-lg hover:bg-gray-100 transition-all duration-300"
+              className="text-gray-900 bg-white border border-gray-200 px-6 py-2.5 rounded-full font-light text-sm shadow-lg hover:bg-gray-50 transition-all duration-300"
             >
-              Se connecter
+              Connexion
             </Link>
             <Link
               to="/register"
-              className="bg-primary text-white px-5 py-2.5 rounded-full text-sm shadow-lg hover:bg-primary/90 transition-all duration-300"
+              className="bg-gray-900 text-white px-6 py-2.5 rounded-full font-light text-sm shadow-2xl hover:bg-gray-800 transition-all duration-300"
             >
-              S'inscrire
+              Inscription
             </Link>
           </div>
         )}
-
       </div>
     </header>
   );

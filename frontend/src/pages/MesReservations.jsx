@@ -3,6 +3,18 @@ import { useNavigate } from 'react-router-dom';
 import { apiService } from '../services/apiService';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
+import { 
+  AlertCircle, 
+  Plus, 
+  Calendar, 
+  MapPin, 
+  Car, 
+  Tag, 
+  CheckCircle,
+  X,
+  LogIn,
+  LogOut
+} from 'lucide-react';
 
 const MesReservations = () => {
   const navigate = useNavigate();
@@ -19,7 +31,7 @@ const MesReservations = () => {
     try {
       const token = localStorage.getItem('token');
       if (!token) {
-        alert('❌ Vous devez être connecté pour voir vos réservations');
+        alert('Vous devez être connecté pour voir vos réservations');
         navigate('/login');
         return;
       }
@@ -28,17 +40,17 @@ const MesReservations = () => {
       if (response.success) {
         setReservations(response.reservations || []);
       } else {
-        alert('❌ Erreur lors du chargement des réservations');
+        alert('Erreur lors du chargement des réservations');
       }
     } catch (error) {
       console.error('Erreur chargement réservations:', error);
       if (error.message.includes('Utilisateur non trouvé') || error.message.includes('Token')) {
-        alert('❌ Session expirée. Veuillez vous reconnecter.');
+        alert('Session expirée. Veuillez vous reconnecter.');
         localStorage.removeItem('token');
         localStorage.removeItem('user');
         navigate('/login');
       } else {
-        alert('❌ Erreur: ' + error.message);
+        alert('Erreur: ' + error.message);
       }
     } finally {
       setLoading(false);
@@ -185,6 +197,7 @@ const MesReservations = () => {
 const ReservationCard = ({ reservation, statusBadge, formatDate, onCancel }) => {
   const [showDetails, setShowDetails] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
   
   const handleCancel = async () => {
     if (!window.confirm('Êtes-vous sûr de vouloir annuler cette réservation ?')) {
@@ -206,6 +219,58 @@ const ReservationCard = ({ reservation, statusBadge, formatDate, onCancel }) => 
       setCancelling(false);
     }
   };
+
+  const handleEnter = async () => {
+    setActionLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await apiService.enterReservation(token, reservation.id);
+      if (response.success) {
+        alert(`✅ ${response.message}`);
+        onCancel();
+      }
+    } catch (error) {
+      alert('❌ ' + error.message);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleExit = async () => {
+    if (!window.confirm('Confirmer la sortie du parking ? Cela arrêtera le compteur.')) return;
+    setActionLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await apiService.exitReservation(token, reservation.id);
+      if (response.success) {
+        alert(`✅ ${response.message}\n\n💰 Montant final : ${response.montant_final} €\n⏱ Durée : ${response.duree_totale}`);
+        onCancel();
+      }
+    } catch (error) {
+      alert('❌ ' + error.message);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleInvoice = async () => {
+    try {
+      // Pas besoin de token ici car cookie
+      const htmlContent = await apiService.getInvoice(reservation.id);
+      
+      // Ouvrir une nouvelle fenêtre avec le HTML
+      const win = window.open("", "_blank");
+      win.document.write(htmlContent);
+      win.document.close();
+    } catch (error) {
+      alert('❌ Impossible de récupérer la facture : ' + error.message);
+    }
+  };
+
+  const canEnter = reservation.statut === 'confirmée' && !reservation.date_entree && !reservation.date_sortie;
+  const canExit = reservation.statut === 'confirmée' && reservation.date_entree && !reservation.date_sortie;
+  // Facture disponible si terminée et payée (ou montant final > 0)
+  const canInvoice = reservation.date_sortie && reservation.montant_final;
 
   return (
     <div className="bg-white rounded-3xl border border-gray-200 overflow-hidden hover:shadow-xl transition-all duration-500">
@@ -229,9 +294,19 @@ const ReservationCard = ({ reservation, statusBadge, formatDate, onCancel }) => 
           </div>
           <div className="text-right">
             <div className="text-3xl font-light text-gray-900 mb-1">
-              {reservation.montant}€
+              {reservation.montant_final ? reservation.montant_final : reservation.montant}€
             </div>
-            <div className="text-sm text-gray-500">Montant total</div>
+            <div className="text-sm text-gray-500">{reservation.montant_final ? 'Montant final' : 'Montant estimé'}</div>
+            
+            {/* Bouton Facture */}
+            {canInvoice && (
+              <button
+                onClick={handleInvoice}
+                className="mt-2 text-sm text-indigo-600 hover:text-indigo-800 font-medium flex items-center justify-end gap-1 w-full"
+              >
+                📄 Facture
+              </button>
+            )}
           </div>
         </div>
 
@@ -242,30 +317,61 @@ const ReservationCard = ({ reservation, statusBadge, formatDate, onCancel }) => 
             <div className="text-gray-900 font-medium">
               {formatDate(reservation.date_debut)}
             </div>
+            {reservation.date_entree && (
+                <div className="text-xs text-green-600 mt-1">
+                    Entré à {formatDate(reservation.date_entree)}
+                </div>
+            )}
           </div>
           <div>
             <div className="text-sm text-gray-500 mb-1">Fin</div>
             <div className="text-gray-900 font-medium">
               {formatDate(reservation.date_fin)}
             </div>
+            {reservation.date_sortie && (
+                <div className="text-xs text-red-600 mt-1">
+                    Sorti à {formatDate(reservation.date_sortie)}
+                </div>
+            )}
           </div>
         </div>
 
         {/* Actions */}
-        <div className="flex gap-3">
+        <div className="flex gap-3 flex-wrap">
           <button
             onClick={() => setShowDetails(!showDetails)}
             className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl font-medium hover:bg-gray-200 transition-all"
           >
-            {showDetails ? 'Masquer les détails' : 'Voir les détails'}
+            {showDetails ? 'Masquer' : 'Détails'}
           </button>
-          {reservation.statut !== 'annulée' && new Date(reservation.date_debut) > new Date() && (
+          
+          {canEnter && (
+            <button
+                onClick={handleEnter}
+                disabled={actionLoading}
+                className="flex-1 py-3 bg-green-600 text-white rounded-xl font-medium hover:bg-green-700 transition-all flex items-center justify-center gap-2"
+            >
+                <LogIn size={18} /> {actionLoading ? '...' : 'Entrer'}
+            </button>
+          )}
+
+          {canExit && (
+            <button
+                onClick={handleExit}
+                disabled={actionLoading}
+                className="flex-1 py-3 bg-red-600 text-white rounded-xl font-medium hover:bg-red-700 transition-all flex items-center justify-center gap-2"
+            >
+                <LogOut size={18} /> {actionLoading ? '...' : 'Sortir'}
+            </button>
+          )}
+
+          {reservation.statut !== 'annulée' && !reservation.date_entree && new Date(reservation.date_debut) > new Date() && (
             <button
               onClick={handleCancel}
               disabled={cancelling}
               className="flex-1 py-3 bg-red-50 text-red-600 rounded-xl font-medium hover:bg-red-100 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {cancelling ? 'Annulation...' : 'Annuler la réservation'}
+              {cancelling ? '...' : 'Annuler'}
             </button>
           )}
         </div>
@@ -274,7 +380,7 @@ const ReservationCard = ({ reservation, statusBadge, formatDate, onCancel }) => 
         {showDetails && (
           <div className="mt-6 pt-6 border-t border-gray-100 space-y-3">
             <div className="flex justify-between text-sm">
-              <span className="text-gray-500">Durée</span>
+              <span className="text-gray-500">Durée prévue</span>
               <span className="text-gray-900 font-medium">
                 {Math.ceil((new Date(reservation.date_fin) - new Date(reservation.date_debut)) / (1000 * 60 * 60))} heures
               </span>
@@ -282,12 +388,6 @@ const ReservationCard = ({ reservation, statusBadge, formatDate, onCancel }) => 
             <div className="flex justify-between text-sm">
               <span className="text-gray-500">Type de stationnement</span>
               <span className="text-gray-900 font-medium">Horaire</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-500">Date de réservation</span>
-              <span className="text-gray-900 font-medium">
-                {new Date().toLocaleDateString('fr-FR')}
-              </span>
             </div>
           </div>
         )}

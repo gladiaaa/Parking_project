@@ -13,7 +13,7 @@ export default function OwnerDashboard() {
   const [showEditForm, setShowEditForm] = useState(null);
   const userStr = localStorage.getItem("user");
   const user = userStr ? JSON.parse(userStr) : null;
-
+  
   const [monthlyRevenue, setMonthlyRevenue] = useState(0);
   const [activeReservations, setActiveReservations] = useState(0);
   const [activeStationnements, setActiveStationnements] = useState(0);
@@ -30,11 +30,11 @@ export default function OwnerDashboard() {
   });
 
   useEffect(() => {
-    apiService.getCurrentUser().then((me) => {
-      if (!me || me.role !== "owner") {
-        navigate("/login");
-      }
-    });
+    const token = localStorage.getItem("token");
+    if (!token) {
+      navigate("/login");
+      return;
+    }
 
     loadData();
   }, [navigate]);
@@ -78,7 +78,7 @@ export default function OwnerDashboard() {
 
     try {
       const result = await apiService.addParking(token, newParking);
-
+      
       if (result.success) {
         setParkings([...parkings, result.parking]);
         setNewParking({
@@ -168,7 +168,7 @@ export default function OwnerDashboard() {
               <h2 className="text-2xl font-serif font-normal mb-6 text-gray-900">
                 Ajouter un parking
               </h2>
-
+              
               <form onSubmit={handleAddParking} className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
@@ -265,7 +265,7 @@ export default function OwnerDashboard() {
                 />
               </div>
                 </div>
-
+                
                 <div className="flex gap-4">
                   <button type="submit" className="bg-zenpark text-white px-8 py-3 rounded-xl hover:bg-zenpark-700 transition font-medium">
                     Ajouter le parking
@@ -310,7 +310,7 @@ export default function OwnerDashboard() {
                   <div key={parking.id} className="bg-white rounded-2xl shadow p-6">
                     <h3 className="text-xl font-semibold text-gray-900 mb-3">{parking.nom}</h3>
                     <p className="text-gray-600 text-sm mb-4">{parking.adresse}</p>
-
+                    
                     <div className="space-y-2 mb-4 text-sm">
                       <div className="flex justify-between">
                         <span className="text-gray-600">Places:</span>

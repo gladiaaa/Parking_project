@@ -6,59 +6,49 @@ import { apiService } from "../services/apiService";
 
 export default function UserDashboard() {
   const navigate = useNavigate();
-
-  const [user, setUser] = useState(() => {
-    const userStr = localStorage.getItem("user");
-    return userStr ? JSON.parse(userStr) : null;
-  });
-
   const [reservations, setReservations] = useState([]);
   const [stationnements, setStationnements] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const userStr = localStorage.getItem("user");
+  const user = userStr ? JSON.parse(userStr) : null;
 
-  // Récupérer les infos de l'utilisateur depuis le back
   useEffect(() => {
-    const fetchUser = async () => {
-      setLoading(true);
-      setError("");
+    const token = localStorage.getItem("token");
+    if (!token) {
+      navigate("/login");
+      return;
+    }
 
-      try {
-        const currentUser = await apiService.getCurrentUser();
-
-        if (!currentUser) {
-          // Pas connecté côté back → on redirige
-          navigate("/login");
-          return;
-        }
-
-        setUser(currentUser);
-        // On synchronise localStorage au cas où
-        localStorage.setItem("user", JSON.stringify(currentUser));
-
-        // TODO: plus tard, quand les API existeront :
-        // const reservationsRes = await apiService.getReservations();
-        // setReservations(reservationsRes.reservations || []);
-        // const stationnementsRes = await apiService.getStationnements();
-        // setStationnements(stationnementsRes.stationnements || []);
-      } catch (err) {
-        console.error(err);
-        setError(
-          err.message || "Erreur lors du chargement des informations utilisateur"
-        );
-        navigate("/login");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchUser();
+    loadData();
   }, [navigate]);
+
+  const loadData = async () => {
+    const token = localStorage.getItem("token");
+    setLoading(true);
+    setError("");
+
+    try {
+      const reservationsResult = await apiService.getReservations(token);
+      if (reservationsResult.success) {
+        const allReservations = reservationsResult.reservations || [];
+        setReservations(allReservations);
+
+        // Derive active stationnements (Entré mais pas encore sorti)
+        const active = allReservations.filter(r => r.date_entree && !r.date_sortie);
+        setStationnements(active);
+      }
+    } catch (err) {
+      setError(err.message || "Erreur lors du chargement des données");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
       <Header />
-      <main className="flex-1 pt-28">
+      <main className="flex-1">
         {/* Hero Section */}
         <section className="bg-zenpark text-white py-12">
           <div className="container mx-auto px-6 lg:px-12">
@@ -68,14 +58,6 @@ export default function UserDashboard() {
             <p className="text-white/90 text-lg">
               Bienvenue sur votre espace personnel
             </p>
-            {user?.role && (
-              <p className="mt-2 text-white/80 text-sm">
-                Rôle :{" "}
-                <span className="inline-block px-3 py-1 rounded-full bg-white/10 border border-white/20">
-                  {user.role === "owner" ? "Propriétaire de parking" : "Client"}
-                </span>
-              </p>
-            )}
           </div>
         </section>
 
@@ -186,13 +168,10 @@ export default function UserDashboard() {
                         <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
                       </span>
                     </div>
-
+                    
                     <p className="text-gray-600 text-sm">
-                      Début :{" "}
-                      {stationnement.date_debut
-                        ? new Date(
-                            stationnement.date_debut
-                          ).toLocaleString("fr-FR")
+                      Début: {stationnement.date_debut
+                        ? new Date(stationnement.date_debut).toLocaleString('fr-FR')
                         : "N/A"}
                     </p>
                 </div>
