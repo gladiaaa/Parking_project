@@ -63,7 +63,7 @@ export default function Header() {
   };
 
   return (
-    <header className="fixed top-6 left-0 right-0 z-50 px-6">
+    <header className="fixed top-0 left-0 right-0 z-50 px-6 pt-6">
       <div className="max-w-7xl mx-auto flex justify-between items-center">
         {/* Logo */}
         <Link to="/" className="flex items-center space-x-2">

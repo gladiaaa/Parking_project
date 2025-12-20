@@ -168,7 +168,7 @@ $createParking = new CreateParking($parkingRepository);
 $createReservation = new CreateReservation($parkingRepository, $reservationRepository, $occupancy, $subscriptionRepository);
 
 $billing = new BillingCalculator();
-$enterReservation = new EnterReservation($reservationRepository, $stationnementRepository);
+$enterReservation = new EnterReservation($reservationRepository, $stationnementRepository, $parkingRepository);
 $exitReservation = new ExitReservation($reservationRepository, $stationnementRepository, $parkingRepository, $billing);
 $getInvoiceHtml = new GetInvoiceHtml($reservationRepository, $stationnementRepository, $parkingRepository);
 

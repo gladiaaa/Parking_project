@@ -12,7 +12,6 @@ use App\UseCase\Owner\ListActiveStationnementsForOwner;
 use App\UseCase\Owner\GetMonthlyRevenueForOwner;
 use App\UseCase\Parking\CreateParking;
 
-
 final class OwnerParkingController
 {
     public function __construct(
@@ -21,11 +20,9 @@ final class OwnerParkingController
         private ListParkingReservationsForOwner $listParkingReservationsForOwner,
         private ListActiveStationnementsForOwner $listActiveStationnementsForOwner,
         private CreateParking $createParking,
-        private GetMonthlyRevenueForOwner $getMonthlyRevenueForOwner,
-
+        private GetMonthlyRevenueForOwner $getMonthlyRevenueForOwner
     ) {
     }
-
 
     public function jwt(): JwtManager
     {
@@ -41,8 +38,30 @@ final class OwnerParkingController
             return;
         }
 
-        $ownerId = (int) ($payload['sub'] ?? 0);
+        $ownerId = (int)($payload['sub'] ?? 0);
         $data = json_decode(file_get_contents('php://input') ?: '[]', true) ?: [];
+
+        // Normalisation légère (controller = input boundary)
+        // - address: string
+        // - opening_days: int[] 1..7 (si absent => default géré par usecase/repo)
+        if (isset($data['address'])) {
+            $data['address'] = (string)$data['address'];
+        }
+
+        if (isset($data['opening_days'])) {
+            $days = $data['opening_days'];
+
+            // accepte "1,4" ou ["1","4"] ou [1,4]
+            if (is_string($days)) {
+                $days = array_filter(array_map('trim', explode(',', $days)), fn($v) => $v !== '');
+            }
+
+            if (is_array($days)) {
+                $days = array_map('intval', $days);
+                $days = array_values(array_unique(array_filter($days, fn($d) => $d >= 1 && $d <= 7)));
+                $data['opening_days'] = $days;
+            }
+        }
 
         try {
             $result = $this->createParking->execute($ownerId, $data);
@@ -51,7 +70,6 @@ final class OwnerParkingController
             Response::json(['success' => false, 'error' => $e->getMessage()], 400);
         }
     }
-
 
     #[IsGranted('OWNER')]
     public function listMyParkings(): void
@@ -62,7 +80,7 @@ final class OwnerParkingController
             return;
         }
 
-        $ownerId = (int) ($payload['sub'] ?? 0);
+        $ownerId = (int)($payload['sub'] ?? 0);
         $data = $this->listOwnerParkings->execute($ownerId);
 
         Response::json(['data' => $data], 200);
@@ -77,9 +95,9 @@ final class OwnerParkingController
             return;
         }
 
-        $ownerId = (int) ($payload['sub'] ?? 0);
-        $from = isset($_GET['from']) ? (string) $_GET['from'] : null;
-        $to = isset($_GET['to']) ? (string) $_GET['to'] : null;
+        $ownerId = (int)($payload['sub'] ?? 0);
+        $from = isset($_GET['from']) ? (string)$_GET['from'] : null;
+        $to   = isset($_GET['to']) ? (string)$_GET['to'] : null;
 
         $data = $this->listParkingReservationsForOwner->execute(
             ownerId: $ownerId,
@@ -100,7 +118,7 @@ final class OwnerParkingController
             return;
         }
 
-        $ownerId = (int) ($payload['sub'] ?? 0);
+        $ownerId = (int)($payload['sub'] ?? 0);
 
         try {
             $data = $this->listActiveStationnementsForOwner->execute($ownerId, $id);
@@ -111,6 +129,7 @@ final class OwnerParkingController
             Response::json(['error' => $msg], $code);
         }
     }
+
     #[IsGranted('OWNER')]
     public function monthlyRevenue(int $id): void
     {
@@ -120,8 +139,8 @@ final class OwnerParkingController
             return;
         }
 
-        $ownerId = (int) ($payload['sub'] ?? 0);
-        $month = (string) ($_GET['month'] ?? '');
+        $ownerId = (int)($payload['sub'] ?? 0);
+        $month = (string)($_GET['month'] ?? '');
 
         try {
             $data = $this->getMonthlyRevenueForOwner->execute($ownerId, $id, $month);
@@ -129,10 +148,10 @@ final class OwnerParkingController
         } catch (\RuntimeException $e) {
             $msg = $e->getMessage();
             $code = ($msg === 'Accès refusé') ? 403 : 400;
-            if ($msg === 'Parking not found')
+            if ($msg === 'Parking not found') {
                 $code = 404;
+            }
             Response::json(['error' => $msg], $code);
         }
     }
-
 }

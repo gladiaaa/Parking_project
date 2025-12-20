@@ -122,10 +122,16 @@ export const apiService = {
   // PARKINGS (strict: selon ton bootstrap)
   // =====================
 
-  getParkingDetails(id) {
-    return request(withQuery("/parkings/details", { id }), { method: "GET" });
-  },
+getParkingDetails(id) {
+  return request(withQuery("/parkings/details", { id }), { method: "GET" });
+},
 
+  searchParkings(lat, lng, radius, startAt, endAt) {
+  return request(
+    withQuery("/parkings/search", { lat, lng, radius, start_at: startAt, end_at: endAt }),
+    { method: "GET" }
+  );
+},
   checkAvailability(parkingId, startAt, endAt) {
     return request(
       withQuery("/parkings/availability", {
@@ -141,8 +147,7 @@ export const apiService = {
     return request("/parkings/occupancy-now", { method: "GET" });
   },
 
-  // ⚠️ Ton backend ne montre PAS de GET /parkings (liste).
-  // Donc je ne l’invente pas ici. Si vous en avez besoin, il faudra une route backend.
+
 
   // =====================
   // RESERVATIONS
@@ -196,6 +201,12 @@ export const apiService = {
 
 getOwnerParkings() {
   return request("/owner/parkings", { method: "GET" });
+},
+getOwnerParkingById(id) {
+  return this.getOwnerParkings().then((res) => {
+    const list = res?.parkings ?? res?.data ?? (Array.isArray(res) ? res : []);
+    return list.find((p) => Number(p.id) === Number(id)) || null;
+  });
 },
 
 createOwnerParking(parkingData) {
