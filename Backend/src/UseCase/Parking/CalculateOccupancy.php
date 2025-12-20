@@ -15,29 +15,36 @@ final class CalculateOccupancy
         private readonly SubscriptionRepository $subscriptions
     ) {}
 
-    /** Nombre de voitures actuellement dans le parking (temps réel) + abonnements actifs NOW. */
+    /** Nombre de voitures actuellement dans le parking (temps réel). */
     public function now(int $parkingId): int
     {
-        $at = (new \DateTimeImmutable('now'))->format('Y-m-d H:i:s');
+        $stationnements = $this->stationnements->countActiveByParkingId($parkingId);
 
-        return $this->stationnements->countActiveByParkingId($parkingId)
-            + $this->subscriptions->countActiveNow($parkingId, $at);
+        // "maintenant" au format attendu par le repo
+        $at = (new \DateTimeImmutable('now'))->format('Y-m-d H:i:s');
+        $subs = $this->subscriptions->countActiveNow($parkingId, $at);
+
+        return $stationnements + $subs;
     }
 
     /**
-     * Occupation sur un créneau.
-     * Stratégie:
-     * - réservations qui chevauchent le créneau, en excluant celles déjà entrées
-     * - + abonnements actifs sur le créneau (occupent une place même sans entrée)
+     * Occupation sur un créneau:
+     * - stationnements qui chevauchent le créneau
+     * - + réservations qui chevauchent le créneau, en excluant celles déjà entrées
+     * - + abonnements actifs sur ce créneau
      */
     public function forSlot(int $parkingId, string $startAt, string $endAt): int
     {
-        return $this->reservations->countOverlappingNotEntered($parkingId, $startAt, $endAt)
-            + $this->subscriptions->countActiveForSlot($parkingId, $startAt, $endAt);
+        $stationnements = $this->stationnements->countOverlappingForSlot($parkingId, $startAt, $endAt);
+        $reservations   = $this->reservations->countOverlappingNotEntered($parkingId, $startAt, $endAt);
+        $subs           = $this->subscriptions->countActiveForSlot($parkingId, $startAt, $endAt);
+
+        return $stationnements + $reservations + $subs;
     }
 
     public function totalForAvailability(int $parkingId, string $startAt, string $endAt): int
     {
-        return $this->now($parkingId) + $this->forSlot($parkingId, $startAt, $endAt);
+        // IMPORTANT: ne pas faire now()+forSlot(), sinon tu doubles.
+        return $this->forSlot($parkingId, $startAt, $endAt);
     }
 }

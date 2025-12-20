@@ -48,13 +48,13 @@ final class CheckAvailability
         }
 
         $capacity = $parking->capacity();
+        
+$occupied = $this->occupancy->forSlot(
+  $parkingId,
+  $start->format('Y-m-d H:i:s'),
+  $end->format('Y-m-d H:i:s')
+);
 
-        // Occupation sur le créneau = présents + réservés (pas encore entrés)
-        $occupied = $this->occupancy->totalForAvailability(
-            $parkingId,
-            $start->format('Y-m-d H:i:s'),
-            $end->format('Y-m-d H:i:s')
-        );
 
         $remaining = max(0, $capacity - $occupied);
 

@@ -1,67 +1,144 @@
-import React, { useEffect, useMemo, useState } from "react";
+// src/pages/MesReservations.jsx
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
 import { apiService } from "../services/apiService";
 import { notifyAuthChanged } from "../services/authStore";
-import { LogIn, LogOut } from "lucide-react";
+import { LogIn, LogOut, FileText, XCircle } from "lucide-react";
 
-const MesReservations = () => {
+/**
+ * Helpers
+ */
+function safeDate(v) {
+  if (!v) return null;
+  const d = new Date(v);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function formatMoney(v) {
+  const n = Number(v ?? 0);
+  if (!Number.isFinite(n)) return "0.00";
+  return n.toFixed(2);
+}
+
+function formatDateFR(dateString) {
+  const d = safeDate(dateString);
+  if (!d) return "Date invalide";
+  return d.toLocaleDateString("fr-FR", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function normalizeReservation(raw) {
+  if (!raw) return null;
+
+  const start =
+    raw.start_at ?? raw.date_debut ?? raw.startAt ?? raw.debut ?? raw.start ?? null;
+
+  const end =
+    raw.end_at ?? raw.date_fin ?? raw.endAt ?? raw.fin ?? raw.end ?? null;
+
+  const enteredAt = raw.entered_at ?? raw.date_entree ?? raw.enteredAt ?? null;
+  const exitedAt = raw.exited_at ?? raw.date_sortie ?? raw.exitedAt ?? null;
+
+  const statusRaw = raw.status ?? raw.statut ?? "confirmée";
+  const status = String(statusRaw).toLowerCase();
+
+  const amountFinal = raw.total_amount ?? raw.montant_final ?? raw.final_amount ?? null;
+  const amountEstimated = raw.amount ?? raw.montant ?? raw.estimated_amount ?? null;
+
+  return {
+    id: Number(raw.id),
+    parkingId: Number(raw.parking_id ?? raw.parkingId ?? raw.parking?.id ?? 0),
+
+    parkingName: raw.parking_nom ?? raw.parkingName ?? raw.parking?.name ?? "Parking",
+    parkingAddress:
+      raw.parking_adresse ??
+      raw.parkingAddress ??
+      raw.parking?.address ??
+      "Adresse non disponible",
+
+    vehicleType: raw.vehicle_type ?? raw.vehicule ?? raw.vehicleType ?? null,
+    plate: raw.immatriculation ?? raw.plate ?? raw.plate_number ?? null,
+
+    startAt: start,
+    endAt: end,
+    enteredAt,
+    exitedAt,
+
+    status,
+    amountFinal,
+    amountEstimated,
+  };
+}
+
+function deriveStatus(res) {
+  const now = new Date();
+  const start = safeDate(res.startAt);
+  const end = safeDate(res.endAt);
+
+  if (["annulée", "annulee", "cancelled"].includes(res.status)) return "cancelled";
+  if (start && now < start) return "upcoming";
+  if (start && end && now >= start && now <= end) return "active";
+  if (end && now > end) return "ended";
+  return "unknown";
+}
+
+function StatusBadge({ kind }) {
+  const map = {
+    cancelled: { label: "Annulée", cls: "bg-red-100 text-red-700" },
+    upcoming: { label: "À venir", cls: "bg-blue-100 text-blue-700" },
+    active: { label: "En cours", cls: "bg-green-100 text-green-700" },
+    ended: { label: "Terminée", cls: "bg-gray-100 text-gray-700" },
+    unknown: { label: "Inconnue", cls: "bg-yellow-100 text-yellow-700" },
+  };
+  const x = map[kind] ?? map.unknown;
+  return (
+    <span className={`px-4 py-2 rounded-full text-sm font-medium ${x.cls}`}>
+      {x.label}
+    </span>
+  );
+}
+
+function Spinner() {
+  return (
+    <div className="flex items-center justify-center py-20">
+      <div className="w-16 h-16 border-4 border-gray-200 border-t-gray-900 rounded-full animate-spin" />
+    </div>
+  );
+}
+
+export default function MesReservations() {
   const navigate = useNavigate();
 
+  const [booting, setBooting] = useState(true);
   const [loading, setLoading] = useState(true);
-  const [booting, setBooting] = useState(true); // auth check
+
   const [reservations, setReservations] = useState([]);
-  const [filter, setFilter] = useState("all"); // all, upcoming, past, cancelled
+  const [filter, setFilter] = useState("all"); // all | upcoming | ended | cancelled
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    (async () => {
-      setError("");
-      setBooting(true);
-
-      try {
-        // 1) Vérifie la session via cookie
-        const me = await apiService.me();
-        const user = me?.user ?? me;
-        if (!user?.id) throw new Error("Not authenticated");
-
-        // Optionnel: garder le user (Header etc.)
-        localStorage.setItem("user", JSON.stringify(user));
-        notifyAuthChanged();
-
-        // 2) Charge les réservations
-        await loadReservations();
-      } catch (e) {
-        // Session invalide / expirée
-        localStorage.removeItem("user");
-        notifyAuthChanged();
-        navigate("/login", { replace: true });
-      } finally {
-        setBooting(false);
-      }
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const loadReservations = async () => {
+  const loadReservations = useCallback(async () => {
     setLoading(true);
     setError("");
 
     try {
-      // Cookie-based: pas de token localStorage
       const payload = await apiService.getMyReservations();
-
-      // Selon ton backend, adapte si besoin:
-      // - payload = { success: true, reservations: [...] }
-      // - ou payload = { reservations: [...] }
       const list = payload?.reservations ?? payload?.data ?? payload ?? [];
-      setReservations(Array.isArray(list) ? list : []);
+      const normalized = (Array.isArray(list) ? list : [])
+        .map(normalizeReservation)
+        .filter(Boolean);
+
+      setReservations(normalized);
     } catch (e) {
       const msg = e?.message || "Erreur lors du chargement des réservations";
       setError(msg);
 
-      // Si 401 => on redirige login
       if (e?.status === 401 || /401|Session expirée/i.test(msg)) {
         localStorage.removeItem("user");
         notifyAuthChanged();
@@ -70,66 +147,66 @@ const MesReservations = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [navigate]);
 
-  const filteredReservations = useMemo(() => {
-    const now = new Date();
+  const ensureAuthAndLoad = useCallback(async () => {
+    setError("");
+    setBooting(true);
 
-    switch (filter) {
-      case "upcoming":
-        return reservations.filter((r) => new Date(r.date_debut) > now);
-      case "past":
-        return reservations.filter((r) => new Date(r.date_fin) < now);
-      case "cancelled":
-        return reservations.filter((r) => r.statut === "annulée");
-      default:
-        return reservations;
+    try {
+      const me = await apiService.me();
+      const user = me?.user ?? me;
+      if (!user?.id) throw new Error("Not authenticated");
+
+      localStorage.setItem("user", JSON.stringify(user));
+      notifyAuthChanged();
+
+      await loadReservations();
+    } catch {
+      localStorage.removeItem("user");
+      notifyAuthChanged();
+      navigate("/login", { replace: true });
+    } finally {
+      setBooting(false);
     }
-  }, [filter, reservations]);
+  }, [loadReservations, navigate]);
 
-  const formatDate = (dateString) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString("fr-FR", {
-      day: "2-digit",
-      month: "long",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
+  useEffect(() => {
+    ensureAuthAndLoad();
+  }, [ensureAuthAndLoad]);
+
+  const computed = useMemo(() => {
+    const withMeta = reservations.map((r) => ({ ...r, _kind: deriveStatus(r) }));
+
+    const counts = {
+      all: withMeta.length,
+      upcoming: withMeta.filter((r) => r._kind === "upcoming").length,
+      ended: withMeta.filter((r) => r._kind === "ended").length,
+      cancelled: withMeta.filter((r) => r._kind === "cancelled").length,
+    };
+
+    const filtered =
+      filter === "upcoming"
+        ? withMeta.filter((r) => r._kind === "upcoming")
+        : filter === "ended"
+        ? withMeta.filter((r) => r._kind === "ended")
+        : filter === "cancelled"
+        ? withMeta.filter((r) => r._kind === "cancelled")
+        : withMeta;
+
+    // Tri logique
+    const order = { upcoming: 1, active: 2, ended: 3, cancelled: 4, unknown: 5 };
+    filtered.sort((a, b) => {
+      const oa = order[a._kind] ?? 99;
+      const ob = order[b._kind] ?? 99;
+      if (oa !== ob) return oa - ob;
+      const ta = safeDate(a.startAt)?.getTime?.() ?? 0;
+      const tb = safeDate(b.startAt)?.getTime?.() ?? 0;
+      return tb - ta;
     });
-  };
 
-  const getStatusBadge = (reservation) => {
-    const now = new Date();
-    const debut = new Date(reservation.date_debut);
-    const fin = new Date(reservation.date_fin);
-
-    if (reservation.statut === "annulée") {
-      return (
-        <span className="px-4 py-2 bg-red-100 text-red-700 rounded-full text-sm font-medium">
-          Annulée
-        </span>
-      );
-    }
-    if (now < debut) {
-      return (
-        <span className="px-4 py-2 bg-blue-100 text-blue-700 rounded-full text-sm font-medium">
-          À venir
-        </span>
-      );
-    }
-    if (now >= debut && now <= fin) {
-      return (
-        <span className="px-4 py-2 bg-green-100 text-green-700 rounded-full text-sm font-medium">
-          En cours
-        </span>
-      );
-    }
-    return (
-      <span className="px-4 py-2 bg-gray-100 text-gray-700 rounded-full text-sm font-medium">
-        Terminée
-      </span>
-    );
-  };
+    return { filtered, counts };
+  }, [reservations, filter]);
 
   return (
     <>
@@ -146,11 +223,7 @@ const MesReservations = () => {
             </p>
           </div>
 
-          {(booting || loading) && (
-            <div className="flex items-center justify-center py-20">
-              <div className="w-16 h-16 border-4 border-gray-200 border-t-gray-900 rounded-full animate-spin"></div>
-            </div>
-          )}
+          {(booting || loading) && <Spinner />}
 
           {!booting && !loading && error && (
             <div className="bg-red-50 border border-red-200 text-red-700 px-6 py-4 rounded-2xl mb-8">
@@ -163,22 +236,10 @@ const MesReservations = () => {
               {/* Filtres */}
               <div className="flex flex-wrap gap-3 mb-8">
                 {[
-                  { value: "all", label: "Toutes", count: reservations.length },
-                  {
-                    value: "upcoming",
-                    label: "À venir",
-                    count: reservations.filter((r) => new Date(r.date_debut) > new Date()).length,
-                  },
-                  {
-                    value: "past",
-                    label: "Passées",
-                    count: reservations.filter((r) => new Date(r.date_fin) < new Date()).length,
-                  },
-                  {
-                    value: "cancelled",
-                    label: "Annulées",
-                    count: reservations.filter((r) => r.statut === "annulée").length,
-                  },
+                  { value: "all", label: "Toutes", count: computed.counts.all },
+                  { value: "upcoming", label: "À venir", count: computed.counts.upcoming },
+                  { value: "ended", label: "Passées", count: computed.counts.ended },
+                  { value: "cancelled", label: "Annulées", count: computed.counts.cancelled },
                 ].map((item) => (
                   <button
                     key={item.value}
@@ -194,7 +255,7 @@ const MesReservations = () => {
                 ))}
               </div>
 
-              {/* Bouton nouvelle réservation */}
+              {/* Nouvelle réservation */}
               <div className="mb-8">
                 <button
                   onClick={() => navigate("/reservation")}
@@ -205,40 +266,12 @@ const MesReservations = () => {
               </div>
 
               {/* Liste */}
-              {filteredReservations.length === 0 ? (
-                <div className="text-center py-20">
-                  <div className="text-6xl mb-4">📅</div>
-                  <h3 className="text-2xl font-light text-gray-900 mb-2">
-                    Aucune réservation
-                  </h3>
-                  <p className="text-gray-500 mb-8">
-                    {filter === "all"
-                      ? "Vous n'avez pas encore de réservation"
-                      : `Vous n'avez pas de réservation ${
-                          filter === "upcoming"
-                            ? "à venir"
-                            : filter === "past"
-                            ? "passée"
-                            : "annulée"
-                        }`}
-                  </p>
-                  <button
-                    onClick={() => navigate("/reservation")}
-                    className="bg-gray-900 text-white px-8 py-4 rounded-2xl font-medium hover:bg-gray-800 transition-all shadow-lg"
-                  >
-                    Faire une réservation
-                  </button>
-                </div>
+              {computed.filtered.length === 0 ? (
+                <EmptyState filter={filter} onGo={() => navigate("/reservation")} />
               ) : (
                 <div className="space-y-6">
-                  {filteredReservations.map((reservation) => (
-                    <ReservationCard
-                      key={reservation.id}
-                      reservation={reservation}
-                      statusBadge={getStatusBadge(reservation)}
-                      formatDate={formatDate}
-                      onRefresh={loadReservations}
-                    />
+                  {computed.filtered.map((r) => (
+                    <ReservationCard key={r.id} reservation={r} onRefresh={loadReservations} />
                   ))}
                 </div>
               )}
@@ -250,125 +283,155 @@ const MesReservations = () => {
       <Footer />
     </>
   );
-};
+}
 
-// ==========================
-// Card
-// ==========================
-const ReservationCard = ({ reservation, statusBadge, formatDate, onRefresh }) => {
+function EmptyState({ filter, onGo }) {
+  const text =
+    filter === "all"
+      ? "Vous n'avez pas encore de réservation"
+      : filter === "upcoming"
+      ? "Vous n'avez pas de réservation à venir"
+      : filter === "ended"
+      ? "Vous n'avez pas de réservation passée"
+      : "Vous n'avez pas de réservation annulée";
+
+  return (
+    <div className="text-center py-20">
+      <div className="text-6xl mb-4">📅</div>
+      <h3 className="text-2xl font-light text-gray-900 mb-2">Aucune réservation</h3>
+      <p className="text-gray-500 mb-8">{text}</p>
+      <button
+        onClick={onGo}
+        className="bg-gray-900 text-white px-8 py-4 rounded-2xl font-medium hover:bg-gray-800 transition-all shadow-lg"
+      >
+        Faire une réservation
+      </button>
+    </div>
+  );
+}
+
+function ReservationCard({ reservation, onRefresh }) {
   const [showDetails, setShowDetails] = useState(false);
-  const [actionLoading, setActionLoading] = useState(false);
-  const [cancelling, setCancelling] = useState(false);
+  const [busyActionId, setBusyActionId] = useState(null);
+  const [localError, setLocalError] = useState("");
 
-  const canEnter =
-    reservation.statut === "confirmée" &&
-    !reservation.date_entree &&
-    !reservation.date_sortie;
+  const kind = deriveStatus(reservation);
 
-  const canExit =
-    reservation.statut === "confirmée" &&
-    !!reservation.date_entree &&
-    !reservation.date_sortie;
+  // ✅ règles simples et fiables
+  const isCancelled = ["annulée", "annulee", "cancelled"].includes(reservation.status);
+  const canEnter = !isCancelled && !reservation.enteredAt && !reservation.exitedAt;
+  const canExit = !isCancelled && !!reservation.enteredAt && !reservation.exitedAt;
 
-  const canInvoice = !!reservation.date_sortie && !!reservation.montant_final;
+  const canInvoice = !!reservation.exitedAt && reservation.amountFinal != null;
 
   const canCancel =
     typeof apiService.cancelReservation === "function" &&
-    reservation.statut !== "annulée" &&
-    !reservation.date_entree &&
-    new Date(reservation.date_debut) > new Date();
+    kind === "upcoming" &&
+    !reservation.enteredAt &&
+    !isCancelled;
 
-  const handleEnter = async () => {
-    setActionLoading(true);
+  const amount = reservation.amountFinal ?? reservation.amountEstimated ?? 0;
+  const amountLabel = reservation.amountFinal != null ? "Montant final" : "Montant estimé";
+
+  const durationHours = useMemo(() => {
+    const s = safeDate(reservation.startAt);
+    const e = safeDate(reservation.endAt);
+    if (!s || !e) return null;
+    const diff = e.getTime() - s.getTime();
+    if (diff <= 0) return 0;
+    return Math.ceil(diff / (1000 * 60 * 60));
+  }, [reservation.startAt, reservation.endAt]);
+
+  const run = async (actionName, fn) => {
+    setLocalError("");
+    setBusyActionId(actionName);
     try {
+      await fn();
+      await onRefresh();
+    } catch (e) {
+      setLocalError(e?.message || "Action impossible");
+    } finally {
+      setBusyActionId(null);
+    }
+  };
+
+  const handleEnter = () =>
+    run("enter", async () => {
       await apiService.enterReservation(reservation.id);
-      onRefresh();
-    } catch (e) {
-      alert("❌ " + (e?.message || "Erreur entrée parking"));
-    } finally {
-      setActionLoading(false);
-    }
-  };
+    });
 
-  const handleExit = async () => {
-    if (!window.confirm("Confirmer la sortie du parking ? Cela arrêtera le compteur.")) return;
-    setActionLoading(true);
-    try {
+  const handleExit = () =>
+    run("exit", async () => {
+      const ok = window.confirm("Confirmer la sortie du parking ? Cela arrêtera le compteur.");
+      if (!ok) return;
       await apiService.exitReservation(reservation.id);
-      onRefresh();
-    } catch (e) {
-      alert("❌ " + (e?.message || "Erreur sortie parking"));
-    } finally {
-      setActionLoading(false);
-    }
-  };
+    });
+
+  const handleCancel = () =>
+    run("cancel", async () => {
+      const ok = window.confirm("Êtes-vous sûr de vouloir annuler cette réservation ?");
+      if (!ok) return;
+      await apiService.cancelReservation(reservation.id);
+    });
 
   const handleInvoice = async () => {
+    setLocalError("");
     try {
-      // Selon ton apiService: getInvoiceHtml(id) ou getInvoice(id)
       const html =
         typeof apiService.getInvoiceHtml === "function"
           ? await apiService.getInvoiceHtml(reservation.id)
           : await apiService.getInvoice(reservation.id);
 
       const win = window.open("", "_blank");
+      if (!win) throw new Error("Popup bloquée (autorise les popups pour voir la facture).");
       win.document.write(html);
       win.document.close();
     } catch (e) {
-      alert("❌ Impossible de récupérer la facture : " + (e?.message || "Erreur"));
-    }
-  };
-
-  const handleCancel = async () => {
-    if (!window.confirm("Êtes-vous sûr de vouloir annuler cette réservation ?")) return;
-    if (typeof apiService.cancelReservation !== "function") return;
-
-    setCancelling(true);
-    try {
-      await apiService.cancelReservation(reservation.id);
-      onRefresh();
-    } catch (e) {
-      alert("❌ " + (e?.message || "Erreur annulation"));
-    } finally {
-      setCancelling(false);
+      setLocalError(e?.message || "Impossible de récupérer la facture");
     }
   };
 
   return (
     <div className="bg-white rounded-3xl border border-gray-200 overflow-hidden hover:shadow-xl transition-all duration-500">
       <div className="p-8">
-        <div className="flex items-start justify-between mb-6">
-          <div className="flex-1">
-            <div className="flex items-center gap-3 mb-3">
-              <h3 className="text-2xl font-medium text-gray-900">
-                {reservation.parking_nom || "Parking"}
+        {localError && (
+          <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-2xl flex items-start gap-2">
+            <XCircle size={18} className="mt-0.5" />
+            <span>{localError}</span>
+          </div>
+        )}
+
+        <div className="flex items-start justify-between mb-6 gap-6">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-3 mb-3 flex-wrap">
+              <h3 className="text-2xl font-medium text-gray-900 truncate">
+                {reservation.parkingName}
               </h3>
-              {statusBadge}
+              <StatusBadge kind={kind} />
             </div>
-            <p className="text-gray-500 mb-2">
-              📍 {reservation.parking_adresse || "Adresse non disponible"}
-            </p>
-            <p className="text-gray-400 text-sm flex items-center gap-3">
+
+            <p className="text-gray-500 mb-2 truncate">📍 {reservation.parkingAddress}</p>
+
+            <p className="text-gray-400 text-sm flex items-center gap-3 flex-wrap">
               <span>Réservation #{reservation.id}</span>
-              {reservation.vehicule && <span>🚗 {reservation.vehicule}</span>}
-              {reservation.immatriculation && <span>🔖 {reservation.immatriculation}</span>}
+              {reservation.vehicleType && <span>🚗 {reservation.vehicleType}</span>}
+              {reservation.plate && <span>🔖 {reservation.plate}</span>}
+              {reservation.parkingId ? <span>🅿️ Parking #{reservation.parkingId}</span> : null}
             </p>
           </div>
 
-          <div className="text-right">
+          <div className="text-right shrink-0">
             <div className="text-3xl font-light text-gray-900 mb-1">
-              {(reservation.montant_final ?? reservation.montant) ?? 0}€
+              {formatMoney(amount)}€
             </div>
-            <div className="text-sm text-gray-500">
-              {reservation.montant_final ? "Montant final" : "Montant estimé"}
-            </div>
+            <div className="text-sm text-gray-500">{amountLabel}</div>
 
             {canInvoice && (
               <button
                 onClick={handleInvoice}
-                className="mt-2 text-sm text-indigo-600 hover:text-indigo-800 font-medium flex items-center justify-end gap-1 w-full"
+                className="mt-2 text-sm text-indigo-600 hover:text-indigo-800 font-medium flex items-center justify-end gap-2 w-full"
               >
-                📄 Facture
+                <FileText size={16} /> Facture
               </button>
             )}
           </div>
@@ -377,19 +440,20 @@ const ReservationCard = ({ reservation, statusBadge, formatDate, onRefresh }) =>
         <div className="grid md:grid-cols-2 gap-4 mb-6 p-6 bg-gray-50 rounded-2xl">
           <div>
             <div className="text-sm text-gray-500 mb-1">Début</div>
-            <div className="text-gray-900 font-medium">{formatDate(reservation.date_debut)}</div>
-            {reservation.date_entree && (
+            <div className="text-gray-900 font-medium">{formatDateFR(reservation.startAt)}</div>
+            {reservation.enteredAt && (
               <div className="text-xs text-green-600 mt-1">
-                Entré à {formatDate(reservation.date_entree)}
+                Entré à {formatDateFR(reservation.enteredAt)}
               </div>
             )}
           </div>
+
           <div>
             <div className="text-sm text-gray-500 mb-1">Fin</div>
-            <div className="text-gray-900 font-medium">{formatDate(reservation.date_fin)}</div>
-            {reservation.date_sortie && (
+            <div className="text-gray-900 font-medium">{formatDateFR(reservation.endAt)}</div>
+            {reservation.exitedAt && (
               <div className="text-xs text-red-600 mt-1">
-                Sorti à {formatDate(reservation.date_sortie)}
+                Sorti à {formatDateFR(reservation.exitedAt)}
               </div>
             )}
           </div>
@@ -406,30 +470,32 @@ const ReservationCard = ({ reservation, statusBadge, formatDate, onRefresh }) =>
           {canEnter && (
             <button
               onClick={handleEnter}
-              disabled={actionLoading}
+              disabled={busyActionId != null}
               className="flex-1 py-3 bg-green-600 text-white rounded-xl font-medium hover:bg-green-700 transition-all flex items-center justify-center gap-2 disabled:opacity-60"
             >
-              <LogIn size={18} /> {actionLoading ? "..." : "Entrer"}
+              <LogIn size={18} />
+              {busyActionId === "enter" ? "..." : "Entrer"}
             </button>
           )}
 
           {canExit && (
             <button
               onClick={handleExit}
-              disabled={actionLoading}
+              disabled={busyActionId != null}
               className="flex-1 py-3 bg-red-600 text-white rounded-xl font-medium hover:bg-red-700 transition-all flex items-center justify-center gap-2 disabled:opacity-60"
             >
-              <LogOut size={18} /> {actionLoading ? "..." : "Sortir"}
+              <LogOut size={18} />
+              {busyActionId === "exit" ? "..." : "Sortir"}
             </button>
           )}
 
           {canCancel && (
             <button
               onClick={handleCancel}
-              disabled={cancelling}
+              disabled={busyActionId != null}
               className="flex-1 py-3 bg-red-50 text-red-600 rounded-xl font-medium hover:bg-red-100 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {cancelling ? "..." : "Annuler"}
+              {busyActionId === "cancel" ? "..." : "Annuler"}
             </button>
           )}
         </div>
@@ -439,22 +505,19 @@ const ReservationCard = ({ reservation, statusBadge, formatDate, onRefresh }) =>
             <div className="flex justify-between text-sm">
               <span className="text-gray-500">Durée prévue</span>
               <span className="text-gray-900 font-medium">
-                {Math.ceil(
-                  (new Date(reservation.date_fin) - new Date(reservation.date_debut)) /
-                    (1000 * 60 * 60)
-                )}{" "}
-                heures
+                {durationHours == null ? "—" : `${durationHours} heure(s)`}
               </span>
             </div>
+
             <div className="flex justify-between text-sm">
               <span className="text-gray-500">Type de stationnement</span>
-              <span className="text-gray-900 font-medium">Horaire</span>
+              <span className="text-gray-900 font-medium">
+                {reservation.vehicleType ?? "—"}
+              </span>
             </div>
           </div>
         )}
       </div>
     </div>
   );
-};
-
-export default MesReservations;
+}

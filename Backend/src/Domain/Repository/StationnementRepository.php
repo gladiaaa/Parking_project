@@ -25,5 +25,6 @@ interface StationnementRepository
 
 /** @return array{count_exits:int, total_billed:float, total_penalty:float, total:float} */
 public function revenueForParking(string $from, string $to, int $parkingId): array;
+public function countOverlappingForSlot(int $parkingId, string $startAt, string $endAt): int;
 
 }

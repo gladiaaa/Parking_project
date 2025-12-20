@@ -82,41 +82,13 @@ export default function Header() {
           </Link>
 
           <Link
-            to="/reservation"
-            className="px-6 py-2.5 text-white font-light text-sm transition-all duration-300 hover:text-gray-300"
-          >
-            Réserver
-          </Link>
-
-          <Link
-            to="/abonnement"
-            className="px-6 py-2.5 text-white font-light text-sm transition-all duration-300 hover:text-gray-300"
-          >
-            Abonnement
-          </Link>
-
-          <Link
             to="/maps"
             className="px-6 py-2.5 text-white font-light text-sm transition-all duration-300 hover:text-gray-300"
           >
             Carte
           </Link>
 
-          <a
-            href="#services"
-            onClick={handleAnchorNav("#services")}
-            className="px-6 py-2.5 text-white font-light text-sm transition-all duration-300 hover:text-gray-300 cursor-pointer"
-          >
-            Services
-          </a>
 
-          <a
-            href="#tarifs"
-            onClick={handleAnchorNav("#tarifs")}
-            className="px-6 py-2.5 text-white font-light text-sm transition-all duration-300 hover:text-gray-300 cursor-pointer"
-          >
-            Tarifs
-          </a>
         </nav>
 
         {/* Actions à droite */}

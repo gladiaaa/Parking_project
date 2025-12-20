@@ -62,12 +62,14 @@ final class SubscriptionController
             Response::json([
                 'success' => true,
                 'subscription' => [
-                    'id'          => $sub->id(),
-                    'user_id'     => $sub->userId(),
-                    'parking_id'  => $sub->parkingId(),
-                    'start_date'  => $sub->startDate()->format('Y-m-d'),
-                    'end_date'    => $sub->endDate()->format('Y-m-d'),
-                    'weekly_slots'=> $sub->weeklySlots(),
+                    'id'           => $sub->id(),
+                    'user_id'      => $sub->userId(),
+                    'parking_id'   => $sub->parkingId(),
+                    'start_date'   => $sub->startDate()->format('Y-m-d'),
+                    'end_date'     => $sub->endDate()->format('Y-m-d'),
+                    'weekly_slots' => $sub->weeklySlots(),
+                    // ✅ AJOUT: montant "facturé" (calculé et stocké)
+                    'amount'       => $sub->amount(),
                 ],
             ], 201);
         } catch (\Throwable $e) {
@@ -96,11 +98,13 @@ final class SubscriptionController
         $out = [];
         foreach ($subs as $s) {
             $out[] = [
-                'id' => $s->id(),
-                'parking_id' => $s->parkingId(),
-                'start_date' => $s->startDate()->format('Y-m-d'),
-                'end_date' => $s->endDate()->format('Y-m-d'),
+                'id'           => $s->id(),
+                'parking_id'   => $s->parkingId(),
+                'start_date'   => $s->startDate()->format('Y-m-d'),
+                'end_date'     => $s->endDate()->format('Y-m-d'),
                 'weekly_slots' => $s->weeklySlots(),
+                // ✅ AJOUT: montant
+                'amount'       => $s->amount(),
             ];
         }
 

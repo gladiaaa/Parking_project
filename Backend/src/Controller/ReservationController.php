@@ -11,6 +11,8 @@ use App\UseCase\Reservation\CreateReservation;
 use App\UseCase\Reservation\EnterReservation;
 use App\UseCase\Reservation\ExitReservation;
 use App\UseCase\Reservation\GetInvoiceHtml;
+use App\UseCase\Reservation\CancelReservation;
+
 
 final class ReservationController
 {
@@ -20,7 +22,9 @@ final class ReservationController
         private readonly JwtManager $jwt,
         private readonly EnterReservation $enterReservation,
         private readonly ExitReservation $exitReservation,
-        private readonly GetInvoiceHtml $getInvoiceHtml
+        private readonly GetInvoiceHtml $getInvoiceHtml,
+        private readonly CancelReservation $cancelReservation
+
     ) {}
 
     // Pour ton Router/IsGranted
@@ -101,30 +105,55 @@ final class ReservationController
         }
     }
 
-    #[IsGranted('USER')]
-    public function myReservations(): void
-    {
-        $userId = $this->requireUserId();
+   #[IsGranted('USER')]
+public function myReservations(): void
+{
+    $userId = $this->requireUserId();
 
-        try {
-            $rows = $this->reservationRepository->findByUserId($userId);
+    try {
+        // Listing enrichi (JOIN parkings + last stationnement)
+        $rows = $this->reservationRepository->listForUser($userId);
 
-            $this->ok([
-                'data' => array_map(static fn($r) => [
-                    'id' => $r->id(),
-                    'user_id' => $r->userId(),
-                    'parking_id' => $r->parkingId(),
-                    'start_at' => $r->startAt()->format(DATE_ATOM),
-                    'end_at' => $r->endAt()->format(DATE_ATOM),
-                    'vehicle_type' => $r->vehicleType(),
-                    'amount' => $r->amount(),
-                    'created_at' => $r->createdAt()->format(DATE_ATOM),
-                ], $rows),
-            ], 200);
-        } catch (\Throwable $e) {
-            $this->fail($e->getMessage(), 400);
-        }
+        $this->ok([
+            'data' => array_map(static function (array $r): array {
+                $billed  = $r['billed_amount'] !== null ? (float)$r['billed_amount'] : null;
+                $penalty = $r['penalty_amount'] !== null ? (float)$r['penalty_amount'] : 0.0;
+
+                return [
+                    'id' => (int)$r['id'],
+                    'user_id' => (int)$r['user_id'],
+                    'parking_id' => (int)$r['parking_id'],
+
+                    'start_at' => (new \DateTimeImmutable((string)$r['start_at']))->format(DATE_ATOM),
+                    'end_at' => (new \DateTimeImmutable((string)$r['end_at']))->format(DATE_ATOM),
+                    'created_at' => (new \DateTimeImmutable((string)$r['created_at']))->format(DATE_ATOM),
+
+                    'vehicle_type' => (string)($r['vehicle_type'] ?? ''),
+                    'amount' => (float)($r['amount'] ?? 0),
+
+                    'statut' => (string)($r['statut'] ?? 'confirmée'),
+                    'date_annulation' => $r['date_annulation'] ?? null,
+
+                    // infos parking pour le front
+                    'parking_adresse' => (string)($r['parking_address'] ?? ''),
+
+                    // champs CRITIQUES pour afficher Entrer/Sortir
+                    'date_entree' => $r['entered_at']
+                        ? (new \DateTimeImmutable((string)$r['entered_at']))->format(DATE_ATOM)
+                        : null,
+                    'date_sortie' => $r['exited_at']
+                        ? (new \DateTimeImmutable((string)$r['exited_at']))->format(DATE_ATOM)
+                        : null,
+
+                    // montant final si sortie
+                    'montant_final' => $billed !== null ? ($billed + $penalty) : null,
+                ];
+            }, $rows),
+        ], 200);
+    } catch (\Throwable $e) {
+        $this->fail($e->getMessage(), 400);
     }
+}
 
     #[IsGranted('USER')]
     public function enter(int $id): void
@@ -171,4 +200,17 @@ final class ReservationController
             $this->fail($e->getMessage(), 400);
         }
     }
+    #[IsGranted('USER')]
+public function cancel(int $id): void
+{
+    $userId = $this->requireUserId();
+
+    try {
+        $result = $this->cancelReservation->execute($userId, $id);
+        $this->ok($result, 200);
+    } catch (\Throwable $e) {
+        $this->fail($e->getMessage(), 400);
+    }
+}
+
 }

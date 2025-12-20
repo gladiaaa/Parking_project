@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   MapContainer,
   TileLayer,
@@ -8,12 +8,24 @@ import {
   useMap,
 } from "react-leaflet";
 import L from "leaflet";
+import { Link, useNavigate } from "react-router-dom";
 import { apiService } from "../services/apiService";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
 import "leaflet/dist/leaflet.css";
 
+// =========================
+// Config
+// =========================
+const P = {
+  // ✅ Mets ici ta vraie route details si besoin
+  // ex: (id) => `/parking-details/${id}`
+  PARKING_DETAILS_ROUTE: (id) => `/parking/${id}`,
+};
+
+// =========================
 // Fix icônes Leaflet
+// =========================
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl:
@@ -24,9 +36,13 @@ L.Icon.Default.mergeOptions({
     "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
 });
 
+// =========================
+// Helpers
+// =========================
 function MapController({ center, zoom }) {
   const map = useMap();
   useEffect(() => {
+    if (!Array.isArray(center) || center.length !== 2) return;
     map.setView(center, zoom, { animate: true });
   }, [map, center, zoom]);
   return null;
@@ -50,7 +66,7 @@ function normalizeParking(p) {
   if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
 
   return {
-    id: p.id,
+    id: Number(p.id),
     latitude,
     longitude,
     address: p.address ?? p.adresse ?? "Adresse inconnue",
@@ -71,14 +87,170 @@ function tileUrl(style) {
 }
 
 function circleColor(p) {
-  // Si tu n’as pas "places_disponibles", on fait simple:
-  // plus la capacité est grande, plus c’est “vert”.
-  if ((p.capacity ?? 0) >= 100) return "#10b981"; // vert
-  if ((p.capacity ?? 0) >= 30) return "#f59e0b"; // orange
+  // Proxy sur la capacité (vu qu’on n’a pas “places dispo” ici)
+  if ((p.capacity ?? 0) >= 50) return "#10b981"; // vert
+  if ((p.capacity ?? 0) >= 20) return "#f59e0b"; // orange
   return "#ef4444"; // rouge
 }
 
+function useDebouncedValue(value, delay = 250) {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(value), delay);
+    return () => clearTimeout(t);
+  }, [value, delay]);
+  return debounced;
+}
+
+// =========================
+// Address search (api-adresse.data.gouv.fr)
+// =========================
+async function searchAddress(query) {
+  const q = String(query || "").trim();
+  if (!q) return [];
+  const url = `https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(q)}&limit=6`;
+
+  const r = await fetch(url);
+  if (!r.ok) throw new Error("Adresse: erreur API");
+  const data = await r.json();
+
+  const features = Array.isArray(data?.features) ? data.features : [];
+  return features
+    .map((f) => {
+      const label = f?.properties?.label;
+      const coords = f?.geometry?.coordinates; // [lng, lat]
+      if (!label || !Array.isArray(coords) || coords.length < 2) return null;
+      const lng = Number(coords[0]);
+      const lat = Number(coords[1]);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+      return { label, lat, lng };
+    })
+    .filter(Boolean);
+}
+
+function AddressSearchBar({ onPick }) {
+  const [value, setValue] = useState("");
+  const [items, setItems] = useState([]);
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState("");
+
+  const debounced = useDebouncedValue(value, 250);
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function run() {
+      const q = String(debounced || "").trim();
+      if (q.length < 3) {
+        setItems([]);
+        setErr("");
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
+      setErr("");
+
+      try {
+        const res = await searchAddress(q);
+        if (cancelled) return;
+        setItems(res);
+        setOpen(true);
+      } catch (e) {
+        if (cancelled) return;
+        setItems([]);
+        setErr(e?.message || "Erreur adresse");
+        setOpen(true);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [debounced]);
+
+  // close dropdown on outside click
+  useEffect(() => {
+    function onDocClick(e) {
+      if (!containerRef.current) return;
+      if (!containerRef.current.contains(e.target)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, []);
+
+  return (
+    <div ref={containerRef} className="pointer-events-auto w-[380px] max-w-full relative">
+      <div className="bg-white/95 backdrop-blur-2xl rounded-3xl border border-gray-200/50 shadow-2xl px-4 py-3">
+        <div className="flex items-center gap-3">
+          <span className="text-lg">📍</span>
+          <input
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            onFocus={() => setOpen(true)}
+            placeholder="Rechercher une adresse…"
+            className="w-full bg-transparent outline-none text-sm font-light text-gray-900 placeholder:text-gray-400"
+          />
+          {loading ? (
+            <div className="w-4 h-4 border-2 border-gray-300 border-t-gray-900 rounded-full animate-spin" />
+          ) : (
+            <button
+              type="button"
+              onClick={() => {
+                setValue("");
+                setItems([]);
+                setOpen(false);
+                setErr("");
+              }}
+              className="text-xs text-gray-400 hover:text-gray-700"
+              title="Effacer"
+            >
+              ✕
+            </button>
+          )}
+        </div>
+      </div>
+
+      {open && (items.length > 0 || err) && (
+        <div className="absolute left-0 right-0 mt-2 bg-white rounded-2xl border border-gray-200 shadow-xl overflow-hidden">
+          {err ? (
+            <div className="px-4 py-3 text-sm text-red-600">{err}</div>
+          ) : (
+            <ul className="max-h-72 overflow-auto">
+              {items.map((it) => (
+                <li key={`${it.label}-${it.lat}-${it.lng}`}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setValue(it.label);
+                      setOpen(false);
+                      onPick?.(it);
+                    }}
+                    className="w-full text-left px-4 py-3 text-sm text-gray-800 hover:bg-gray-50"
+                  >
+                    {it.label}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// =========================
+// Page
+// =========================
 export default function Maps() {
+  const navigate = useNavigate();
+
   const [parkings, setParkings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -100,18 +272,16 @@ export default function Maps() {
     setError("");
 
     try {
+      // ✅ GET /api/parkings
       const res = await apiService.getParkings();
-      const list = pickList(res)
-        .map(normalizeParking)
-        .filter(Boolean);
+      const list = pickList(res).map(normalizeParking).filter(Boolean);
 
       setParkings(list);
 
-      // Si tu veux: auto-centre sur le premier parking dispo
-      if (list.length > 0) {
-        setCenter([list[0].latitude, list[0].longitude]);
-        setZoom(6);
-      }
+      // garde la France par défaut: pas de recenter agressif
+      // (sinon tu te retrouves à zoomer sur un parking random en Lozère, et personne ne veut ça)
+      setCenter(defaultCenter);
+      setZoom(6);
     } catch (e) {
       setParkings([]);
       setError(e?.message || "Impossible de charger les parkings.");
@@ -124,6 +294,10 @@ export default function Maps() {
     setSelectedParking(p);
     setCenter([p.latitude, p.longitude]);
     setZoom(14);
+  }
+
+  function goToDetails(parkingId) {
+    navigate(P.PARKING_DETAILS_ROUTE(parkingId));
   }
 
   if (loading) {
@@ -144,9 +318,9 @@ export default function Maps() {
 
       <div className="min-h-screen bg-white relative">
         {/* Header flottant */}
-        <div className="absolute top-24 left-0 right-0 z-[100] pointer-events-none">
+        <div className="absolute top-24 left-0 right-0 z-[500] pointer-events-none">
           <div className="max-w-7xl mx-auto px-6 py-6">
-            <div className="flex items-center justify-between gap-4">
+            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
               <div className="bg-white/95 backdrop-blur-2xl rounded-3xl border border-gray-200/50 shadow-2xl p-6 pointer-events-auto">
                 <h1 className="text-4xl font-extralight text-gray-900 tracking-tighter mb-1">
                   Carte des parkings
@@ -158,6 +332,15 @@ export default function Maps() {
                   <p className="mt-2 text-sm text-red-600 font-light">{error}</p>
                 )}
               </div>
+
+              {/* Barre de recherche adresse */}
+              <AddressSearchBar
+                onPick={({ lat, lng }) => {
+                  setSelectedParking(null);
+                  setCenter([lat, lng]);
+                  setZoom(13);
+                }}
+              />
 
               {/* Styles map */}
               <div className="bg-white/95 backdrop-blur-2xl rounded-3xl border border-gray-200/50 shadow-2xl p-2 pointer-events-auto flex gap-2">
@@ -196,10 +379,7 @@ export default function Maps() {
             zoomControl
             className="modern-map"
           >
-            <TileLayer
-              attribution='&copy; OpenStreetMap &copy; CARTO'
-              url={tileUrl(mapStyle)}
-            />
+            <TileLayer attribution="&copy; OpenStreetMap &copy; CARTO" url={tileUrl(mapStyle)} />
             <MapController center={center} zoom={zoom} />
 
             {parkings.map((p) => {
@@ -232,9 +412,27 @@ export default function Maps() {
                           📍 {p.address}
                         </p>
 
-                        <div className="flex items-center gap-3 text-xs text-gray-500 font-light">
+                        <div className="flex items-center gap-3 text-xs text-gray-500 font-light mb-4">
                           <span>🅿️ {p.capacity} places</span>
-                          <span>💰 {p.hourly_rate.toFixed(2)}€/h</span>
+                          <span>💰 {Number(p.hourly_rate).toFixed(2)}€/h</span>
+                        </div>
+
+                        <div className="flex gap-2">
+                          <Link
+                            to={P.PARKING_DETAILS_ROUTE(p.id)}
+                            className="flex-1 text-center bg-gray-900 text-white py-2.5 rounded-xl text-sm font-light hover:bg-gray-800 transition-all shadow-lg"
+                          >
+                            Voir détails
+                          </Link>
+
+                          <button
+                            type="button"
+                            onClick={() => goToDetails(p.id)}
+                            className="px-3 py-2.5 rounded-xl bg-gray-100 text-gray-700 hover:bg-gray-200 transition-all text-sm"
+                            title="Ouvrir"
+                          >
+                            ↗
+                          </button>
                         </div>
                       </div>
                     </Popup>
@@ -247,7 +445,7 @@ export default function Maps() {
 
         {/* Card sélectionnée */}
         {selectedParking && (
-          <div className="fixed bottom-6 left-6 right-6 z-[100] pointer-events-none animate-fade-in">
+          <div className="fixed bottom-6 left-6 right-6 z-[600] pointer-events-none animate-fade-in">
             <div className="max-w-lg mx-auto">
               <div className="bg-white/98 backdrop-blur-2xl rounded-3xl border border-gray-200/50 shadow-2xl p-7 pointer-events-auto">
                 <div className="flex items-start justify-between gap-4">
@@ -264,17 +462,13 @@ export default function Maps() {
                         <div className="text-lg font-extralight text-gray-900">
                           🅿️ {selectedParking.capacity}
                         </div>
-                        <div className="text-xs text-gray-400 font-light">
-                          Capacité
-                        </div>
+                        <div className="text-xs text-gray-400 font-light">Capacité</div>
                       </div>
                       <div className="bg-gray-50 rounded-xl p-3 text-center">
                         <div className="text-lg font-extralight text-gray-900">
-                          💰 {selectedParking.hourly_rate.toFixed(2)}€
+                          💰 {Number(selectedParking.hourly_rate).toFixed(2)}€
                         </div>
-                        <div className="text-xs text-gray-400 font-light">
-                          / heure
-                        </div>
+                        <div className="text-xs text-gray-400 font-light">/ heure</div>
                       </div>
                     </div>
                   </div>
@@ -306,22 +500,29 @@ export default function Maps() {
                   </button>
 
                   <button
-                    onClick={() => loadParkings()}
+                    onClick={() => goToDetails(selectedParking.id)}
                     className="flex-1 bg-gray-900 text-white py-3 rounded-xl font-light hover:bg-gray-800 transition-all shadow-lg text-sm"
                     type="button"
                   >
-                    ↻ Rafraîchir
+                    Voir détails
+                  </button>
+
+                  <button
+                    onClick={loadParkings}
+                    className="px-4 bg-white border border-gray-200 text-gray-700 py-3 rounded-xl font-light hover:bg-gray-50 transition-all text-sm"
+                    type="button"
+                    title="Rafraîchir les parkings"
+                  >
+                    ↻
                   </button>
                 </div>
-                
               </div>
-              
             </div>
-            
           </div>
         )}
-                {/* Légende (capacité, faute de “places dispo”) */}
-        <div className="absolute bottom-6 right-6 z-[100] bg-white/95 backdrop-blur-2xl rounded-2xl border border-gray-200/50 shadow-2xl p-4 pointer-events-auto">
+
+        {/* Légende */}
+        <div className="absolute bottom-6 right-6 z-[500] bg-white/95 backdrop-blur-2xl rounded-2xl border border-gray-200/50 shadow-2xl p-4 pointer-events-auto">
           <div className="text-xs font-light text-gray-500 mb-2 uppercase tracking-wider">
             Capacité (proxy)
           </div>

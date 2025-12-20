@@ -12,9 +12,10 @@ final class Subscription
         private ?int $id,
         private int $userId,
         private int $parkingId,
-        private \DateTimeImmutable $startDate, // date only (00:00)
-        private \DateTimeImmutable $endDate,   // date only (00:00)
-        private array $weeklySlots
+        private \DateTimeImmutable $startDate,
+        private \DateTimeImmutable $endDate,
+        private array $weeklySlots,
+        private float $amount = 0.0
     ) {}
 
     public function id(): ?int { return $this->id; }
@@ -26,8 +27,31 @@ final class Subscription
     /** @return array<int, array{dow:int,start:string,end:string}> */
     public function weeklySlots(): array { return $this->weeklySlots; }
 
+    public function amount(): float { return $this->amount; }
+
     public function withId(int $id): self
     {
-        return new self($id, $this->userId, $this->parkingId, $this->startDate, $this->endDate, $this->weeklySlots);
+        return new self(
+            $id,
+            $this->userId,
+            $this->parkingId,
+            $this->startDate,
+            $this->endDate,
+            $this->weeklySlots,
+            $this->amount
+        );
+    }
+
+    public function withAmount(float $amount): self
+    {
+        return new self(
+            $this->id,
+            $this->userId,
+            $this->parkingId,
+            $this->startDate,
+            $this->endDate,
+            $this->weeklySlots,
+            round($amount, 2)
+        );
     }
 }

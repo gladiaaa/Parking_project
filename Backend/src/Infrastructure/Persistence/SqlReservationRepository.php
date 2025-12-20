@@ -13,30 +13,49 @@ final class SqlReservationRepository implements ReservationRepository
     {
     }
 
-    public function save(Reservation $reservation): Reservation
-    {
-        if ($reservation->id() === null) {
-            $stmt = $this->db->prepare("
-                INSERT INTO reservations (user_id, parking_id, start_at, end_at, vehicle_type, amount, created_at)
-                VALUES (:user_id, :parking_id, :start_at, :end_at, :vehicle_type, :amount, :created_at)
-            ");
+public function save(Reservation $reservation): Reservation
+{
+    if ($reservation->id() === null) {
+        $stmt = $this->db->prepare("
+            INSERT INTO reservations (
+                user_id,
+                parking_id,
+                start_at,
+                end_at,
+                vehicle_type,
+                amount,
+                statut,
+                created_at
+            )
+            VALUES (
+                :user_id,
+                :parking_id,
+                :start_at,
+                :end_at,
+                :vehicle_type,
+                :amount,
+                :statut,
+                :created_at
+            )
+        ");
 
-            $stmt->execute([
-                ':user_id' => $reservation->userId(),
-                ':parking_id' => $reservation->parkingId(),
-                ':start_at' => $reservation->startAt()->format('Y-m-d H:i:s'),
-                ':end_at' => $reservation->endAt()->format('Y-m-d H:i:s'),
-                ':vehicle_type' => $reservation->vehicleType(),
-                ':amount' => $reservation->amount(),
-                ':created_at' => $reservation->createdAt()->format('Y-m-d H:i:s'),
-            ]);
+        $stmt->execute([
+            ':user_id'      => $reservation->userId(),
+            ':parking_id'   => $reservation->parkingId(),
+            ':start_at'     => $reservation->startAt()->format('Y-m-d H:i:s'),
+            ':end_at'       => $reservation->endAt()->format('Y-m-d H:i:s'),
+            ':vehicle_type' => $reservation->vehicleType(),
+            ':amount'       => $reservation->amount(),
+            ':statut'       => 'confirmée',
+            ':created_at'   => $reservation->createdAt()->format('Y-m-d H:i:s'),
+        ]);
 
-            return $reservation->withId((int) $this->db->lastInsertId());
-        }
-
-        // Si plus tard tu veux update, tu le feras ici.
-        return $reservation;
+        return $reservation->withId((int) $this->db->lastInsertId());
     }
+
+    return $reservation;
+}
+
 
     public function findById(int $id): ?Reservation
     {
@@ -175,6 +194,61 @@ final class SqlReservationRepository implements ReservationRepository
 
     return (bool)$st->fetchColumn();
 }
+
+public function cancelForUser(int $userId, int $reservationId, string $now): bool
+{
+    $stmt = $this->db->prepare("
+        UPDATE reservations
+        SET statut = 'annulée',
+            date_annulation = :now
+        WHERE id = :id
+          AND user_id = :user_id
+          AND statut = 'confirmée'
+          AND start_at > :now
+        LIMIT 1
+    ");
+
+    $stmt->execute([
+        ':now' => $now,
+        ':id' => $reservationId,
+        ':user_id' => $userId,
+    ]);
+
+    return $stmt->rowCount() === 1;
+}
+
+public function listForUser(int $userId): array
+{
+    $sql = "
+        SELECT
+            r.*,
+            p.address AS parking_address,
+
+            s.entered_at,
+            s.exited_at,
+            s.billed_amount,
+            s.penalty_amount
+        FROM reservations r
+        JOIN parkings p ON p.id = r.parking_id
+        LEFT JOIN stationnements s
+          ON s.id = (
+            SELECT s2.id
+            FROM stationnements s2
+            WHERE s2.reservation_id = r.id
+            ORDER BY s2.entered_at DESC
+            LIMIT 1
+          )
+        WHERE r.user_id = :uid
+        ORDER BY r.start_at DESC
+    ";
+
+    $st = $this->db->prepare($sql);
+    $st->execute([':uid' => $userId]);
+
+    return $st->fetchAll(\PDO::FETCH_ASSOC);
+}
+
+
 
 
 }

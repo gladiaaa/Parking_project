@@ -166,6 +166,17 @@ searchParkings(arg1, lng, radius, startAt, endAt) {
     );
   
   },
+  // Alias lisible (utilisé par ParkingDetails refait)
+  getParkingAvailability({ parking_id, start_at, end_at }) {
+    return request(
+      withQuery("/parkings/availability", {
+        parking_id,
+        start_at,
+        end_at,
+      }),
+      { method: "GET" }
+    );
+  },
 
   getOccupancyNow(parkingId) {
     return request(
@@ -199,6 +210,9 @@ searchParkings(arg1, lng, radius, startAt, endAt) {
     return request(`/reservations/${id}/exit`, { method: "POST" });
   },
 
+  cancelReservation(id) {
+    return request(`/reservations/${id}/cancel`, { method: "POST" });
+  },
   getInvoiceHtml(id) {
     // backend renvoie du HTML
     return request(`/reservations/${id}/invoice`, { method: "GET", raw: true });

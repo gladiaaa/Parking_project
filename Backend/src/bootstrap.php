@@ -10,11 +10,8 @@ use App\Infrastructure\Security\PasswordHasher;
 
 use App\Infrastructure\Persistence\PersistenceFactory;
 
-
 use App\Infrastructure\Persistence\SqlUserRepository;
 use App\Infrastructure\Persistence\SqlParkingRepository;
-use App\Infrastructure\Persistence\SqlReservationRepository;
-use App\Infrastructure\Persistence\SqlStationnementRepository;
 
 use App\Controller\AuthController;
 use App\Controller\Auth2FAController;
@@ -23,7 +20,6 @@ use App\Controller\ReservationController;
 use App\Controller\ParkingController;
 use App\Controller\OwnerParkingController;
 use App\Controller\SubscriptionController;
-
 
 use App\UseCase\Subscription\CreateSubscription;
 
@@ -43,20 +39,18 @@ use App\UseCase\Parking\CreateParking;
 use App\UseCase\Parking\SearchParkings;
 use App\UseCase\Parking\ListParkings;
 
-
-
 use App\UseCase\Billing\BillingCalculator;
 
 use App\UseCase\Reservation\CreateReservation;
 use App\UseCase\Reservation\EnterReservation;
 use App\UseCase\Reservation\ExitReservation;
 use App\UseCase\Reservation\GetInvoiceHtml;
+use App\UseCase\Reservation\CancelReservation;
 
 use App\UseCase\Owner\ListOwnerParkings;
 use App\UseCase\Owner\ListParkingReservationsForOwner;
 use App\UseCase\Owner\ListActiveStationnementsForOwner;
 use App\UseCase\Owner\GetMonthlyRevenueForOwner;
-
 
 // =====================
 // ENV
@@ -82,8 +76,7 @@ function cors(): void
 function pdo(): PDO
 {
     static $pdo = null;
-    if ($pdo)
-        return $pdo;
+    if ($pdo) return $pdo;
 
     $dsn = 'mysql:host=' . $_ENV['DB_HOST'] .
         ';dbname=' . $_ENV['DB_NAME'] .
@@ -111,14 +104,13 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'OPTIONS') {
 // =====================
 $db = pdo();
 
-$userRepository = new SqlUserRepository($db);
+$userRepository    = new SqlUserRepository($db);
 $parkingRepository = new SqlParkingRepository($db);
 
 // Switchable (sql/json) WITHOUT touching UseCases
-
-$reservationRepository = PersistenceFactory::reservationRepository($db);
+$reservationRepository   = PersistenceFactory::reservationRepository($db);
 $stationnementRepository = PersistenceFactory::stationnementRepository($db, $reservationRepository);
-$subscriptionRepository = PersistenceFactory::subscriptionRepository($db);
+$subscriptionRepository  = PersistenceFactory::subscriptionRepository($db);
 
 $passwordHasher = new PasswordHasher();
 
@@ -155,35 +147,86 @@ $totpVerifier = new class implements TotpVerifier {
 // =====================
 // UseCases
 // =====================
+
+// Billing (réutilisé partout)
+$billing = new BillingCalculator();
+
 // Auth
-$loginUser = new LoginUser($userRepository, $passwordHasher);
+$loginUser    = new LoginUser($userRepository, $passwordHasher);
 $registerUser = new RegisterUser($userRepository, $passwordHasher);
 $refreshToken = new RefreshToken($jwtManager, $userRepository);
-$startTwoFA = new StartTwoFactor($userRepository, $mailer, $smsSender);
-$verify2FA = new VerifyTwoFactor($userRepository, $jwtManager, $totpVerifier);
+$startTwoFA   = new StartTwoFactor($userRepository, $mailer, $smsSender);
+$verify2FA    = new VerifyTwoFactor($userRepository, $jwtManager, $totpVerifier);
 
 // Parking
 $getParkingDetails = new GetParkingDetails($parkingRepository);
-$occupancy = new CalculateOccupancy($stationnementRepository, $reservationRepository, $subscriptionRepository);
-$checkAvailability = new CheckAvailability($parkingRepository, $occupancy);
-$searchParkings = new SearchParkings($parkingRepository, $checkAvailability);
-$createParking = new CreateParking($parkingRepository);
-$listParkings = new ListParkings($parkingRepository);
 
+$occupancy = new CalculateOccupancy(
+    $stationnementRepository,
+    $reservationRepository,
+    $subscriptionRepository
+);
+
+$checkAvailability = new CheckAvailability($parkingRepository, $occupancy);
+
+$searchParkings = new SearchParkings($parkingRepository, $checkAvailability);
+$createParking  = new CreateParking($parkingRepository);
+$listParkings   = new ListParkings($parkingRepository);
 
 // Reservations
-$createReservation = new CreateReservation($parkingRepository, $reservationRepository, $occupancy, $subscriptionRepository);
+$createReservation = new CreateReservation(
+    $parkingRepository,
+    $reservationRepository,
+    $occupancy,
+    $subscriptionRepository
+);
 
-$billing = new BillingCalculator();
-$enterReservation = new EnterReservation($reservationRepository, $stationnementRepository, $parkingRepository);
-$exitReservation = new ExitReservation($reservationRepository, $stationnementRepository, $parkingRepository, $billing);
-$getInvoiceHtml = new GetInvoiceHtml($reservationRepository, $stationnementRepository, $parkingRepository);
+$enterReservation = new EnterReservation(
+    $reservationRepository,
+    $stationnementRepository,
+    $parkingRepository
+);
+
+$exitReservation = new ExitReservation(
+    $reservationRepository,
+    $stationnementRepository,
+    $parkingRepository,
+    $billing
+);
+
+$getInvoiceHtml = new GetInvoiceHtml(
+    $reservationRepository,
+    $stationnementRepository,
+    $parkingRepository
+);
+
+$cancelReservation = new CancelReservation($reservationRepository);
+
+// Subscriptions
+$createSubscription = new CreateSubscription(
+    $subscriptionRepository,
+    $parkingRepository,
+    $billing
+);
 
 // Owner
 $listOwnerParkings = new ListOwnerParkings($parkingRepository);
-$listParkingReservationsForOwner = new ListParkingReservationsForOwner($parkingRepository, $reservationRepository);
-$listActiveStationnementsForOwner = new ListActiveStationnementsForOwner($parkingRepository, $stationnementRepository);
-$getMonthlyRevenueForOwner = new GetMonthlyRevenueForOwner($parkingRepository, $stationnementRepository);
+
+$listParkingReservationsForOwner = new ListParkingReservationsForOwner(
+    $parkingRepository,
+    $reservationRepository
+);
+
+$listActiveStationnementsForOwner = new ListActiveStationnementsForOwner(
+    $parkingRepository,
+    $stationnementRepository
+);
+
+$getMonthlyRevenueForOwner = new GetMonthlyRevenueForOwner(
+    $parkingRepository,
+    $stationnementRepository
+);
+
 // =====================
 // Controllers
 // =====================
@@ -198,7 +241,6 @@ $authController = new AuthController(
 );
 
 $auth2FAController = new Auth2FAController($verify2FA, $jwtManager);
-
 
 $ownerParkingController = new OwnerParkingController(
     $jwtManager,
@@ -224,18 +266,15 @@ $reservationController = new ReservationController(
     $jwtManager,
     $enterReservation,
     $exitReservation,
-    $getInvoiceHtml
+    $getInvoiceHtml,
+    $cancelReservation
 );
-
-$createSubscription = new CreateSubscription($subscriptionRepository);
 
 $subscriptionController = new SubscriptionController(
     $jwtManager,
     $createSubscription,
     $subscriptionRepository
 );
-
-
 
 // =====================
 // Router
@@ -253,11 +292,9 @@ $router
     ->post('/api/auth/logout', [$authController, 'logout'])
     ->post('/api/auth/2fa/verify', [$auth2FAController, 'verify'])
 
-
-    //Subscriptions
+    // Subscriptions
     ->get('/api/subscriptions/me', [$subscriptionController, 'me'])
     ->post('/api/subscriptions', [$subscriptionController, 'create'])
-
 
     // Parking
     ->get('/api/parkings/search', [$parkingController, 'search'])
@@ -266,7 +303,6 @@ $router
     ->get('/api/parkings/occupancy-now', [$parkingController, 'occupancyNow'])
     ->get('/api/parkings', [$parkingController, 'list'])
 
-
     // Owner
     ->get('/api/owner/parkings', [$ownerParkingController, 'listMyParkings'])
     ->get('/api/owner/parkings/{id}/reservations', [$ownerParkingController, 'listParkingReservations'])
@@ -274,11 +310,10 @@ $router
     ->get('/api/owner/parkings/{id}/revenue', [$ownerParkingController, 'monthlyRevenue'])
     ->post('/api/owner/parkings', [$ownerParkingController, 'createParking'])
 
-
     // Reservations
     ->get('/api/reservations/me', [$reservationController, 'myReservations'])
     ->post('/api/reservations', [$reservationController, 'create'])
     ->post('/api/reservations/{id}/enter', [$reservationController, 'enter'])
     ->post('/api/reservations/{id}/exit', [$reservationController, 'exit'])
-    ->get('/api/reservations/{id}/invoice', [$reservationController, 'invoice']);
-
+    ->get('/api/reservations/{id}/invoice', [$reservationController, 'invoice'])
+    ->post('/api/reservations/{id}/cancel', [$reservationController, 'cancel']);
