@@ -166,4 +166,71 @@ final class SqlParkingRepository implements ParkingRepository
         $ownerId = $stmt->fetchColumn();
         return $ownerId !== false ? (int)$ownerId : null;
     }
+    /**
+ * Recherche des parkings autour d’un point (Haversine)
+ * @return array<int, array<string, mixed>>
+ */
+public function searchNearby(float $lat, float $lng, float $radiusKm): array
+{
+    // Haversine (distance en km)
+    $sql = "
+        SELECT
+            id,
+            latitude,
+            longitude,
+            capacity,
+            hourly_rate,
+            opening_time,
+            closing_time,
+            address,
+            opening_days,
+            (
+              6371 * 2 * ASIN(
+                SQRT(
+                  POWER(SIN(RADIANS(latitude - :lat) / 2), 2) +
+                  COS(RADIANS(:lat)) * COS(RADIANS(latitude)) *
+                  POWER(SIN(RADIANS(longitude - :lng) / 2), 2)
+                )
+              )
+            ) AS distance_km
+        FROM parkings
+        HAVING distance_km <= :radius
+        ORDER BY distance_km ASC
+        LIMIT 100
+    ";
+
+    $stmt = $this->db->prepare($sql);
+    $stmt->execute([
+        ':lat' => $lat,
+        ':lng' => $lng,
+        ':radius' => $radiusKm,
+    ]);
+
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+    /**
+     * Liste de tous les parkings (format brut pour API)
+     * @return array<int, array<string, mixed>>
+     */
+    public function listAll(): array
+    {
+        $stmt = $this->db->query("
+            SELECT
+                id,
+                owner_id,
+                latitude,
+                longitude,
+                capacity,
+                hourly_rate,
+                opening_time,
+                closing_time,
+                address,
+                opening_days
+            FROM parkings
+            ORDER BY id DESC
+        ");
+
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
 }

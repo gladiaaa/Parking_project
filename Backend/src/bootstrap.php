@@ -40,6 +40,9 @@ use App\UseCase\Parking\GetParkingDetails;
 use App\UseCase\Parking\CheckAvailability;
 use App\UseCase\Parking\CalculateOccupancy;
 use App\UseCase\Parking\CreateParking;
+use App\UseCase\Parking\SearchParkings;
+use App\UseCase\Parking\ListParkings;
+
 
 
 use App\UseCase\Billing\BillingCalculator;
@@ -61,7 +64,7 @@ use App\UseCase\Owner\GetMonthlyRevenueForOwner;
 $dotenv = Dotenv::createImmutable(__DIR__ . '/..');
 $dotenv->load();
 
-define('APP_ROOT', realpath(__DIR__ . '/..'));       
+define('APP_ROOT', realpath(__DIR__ . '/..'));
 define('STORAGE_DIR', APP_ROOT . DIRECTORY_SEPARATOR . 'var' . DIRECTORY_SEPARATOR . 'storage');
 
 // =====================
@@ -79,7 +82,8 @@ function cors(): void
 function pdo(): PDO
 {
     static $pdo = null;
-    if ($pdo) return $pdo;
+    if ($pdo)
+        return $pdo;
 
     $dsn = 'mysql:host=' . $_ENV['DB_HOST'] .
         ';dbname=' . $_ENV['DB_NAME'] .
@@ -120,8 +124,8 @@ $passwordHasher = new PasswordHasher();
 
 $jwtManager = new JwtManager(
     $_ENV['JWT_SECRET'],
-    (int)$_ENV['JWT_ACCESS_TTL'],
-    (int)$_ENV['JWT_REFRESH_TTL']
+    (int) $_ENV['JWT_ACCESS_TTL'],
+    (int) $_ENV['JWT_REFRESH_TTL']
 );
 
 // =====================
@@ -162,7 +166,10 @@ $verify2FA = new VerifyTwoFactor($userRepository, $jwtManager, $totpVerifier);
 $getParkingDetails = new GetParkingDetails($parkingRepository);
 $occupancy = new CalculateOccupancy($stationnementRepository, $reservationRepository, $subscriptionRepository);
 $checkAvailability = new CheckAvailability($parkingRepository, $occupancy);
+$searchParkings = new SearchParkings($parkingRepository, $checkAvailability);
 $createParking = new CreateParking($parkingRepository);
+$listParkings = new ListParkings($parkingRepository);
+
 
 // Reservations
 $createReservation = new CreateReservation($parkingRepository, $reservationRepository, $occupancy, $subscriptionRepository);
@@ -206,7 +213,9 @@ $parkingController = new ParkingController(
     $jwtManager,
     $getParkingDetails,
     $checkAvailability,
-    $stationnementRepository
+    $stationnementRepository,
+    $searchParkings,
+    $listParkings
 );
 
 $reservationController = new ReservationController(
@@ -249,11 +258,14 @@ $router
     ->get('/api/subscriptions/me', [$subscriptionController, 'me'])
     ->post('/api/subscriptions', [$subscriptionController, 'create'])
 
-    
+
     // Parking
+    ->get('/api/parkings/search', [$parkingController, 'search'])
     ->get('/api/parkings/details', [$parkingController, 'details'])
     ->get('/api/parkings/availability', [$parkingController, 'availability'])
     ->get('/api/parkings/occupancy-now', [$parkingController, 'occupancyNow'])
+    ->get('/api/parkings', [$parkingController, 'list'])
+
 
     // Owner
     ->get('/api/owner/parkings', [$ownerParkingController, 'listMyParkings'])
@@ -261,6 +273,7 @@ $router
     ->get('/api/owner/parkings/{id}/stationnements/active', [$ownerParkingController, 'listActiveStationnements'])
     ->get('/api/owner/parkings/{id}/revenue', [$ownerParkingController, 'monthlyRevenue'])
     ->post('/api/owner/parkings', [$ownerParkingController, 'createParking'])
+
 
     // Reservations
     ->get('/api/reservations/me', [$reservationController, 'myReservations'])

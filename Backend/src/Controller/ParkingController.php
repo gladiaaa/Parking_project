@@ -8,7 +8,12 @@ use App\Infrastructure\Http\IsGranted;
 use App\Infrastructure\Security\JwtManager;
 use App\UseCase\Parking\GetParkingDetails;
 use App\UseCase\Parking\CheckAvailability;
+use App\UseCase\Parking\SearchParkings;
+use App\UseCase\Parking\ListParkings;
+
+
 use App\Domain\Repository\StationnementRepository;
+
 
 final class ParkingController
 {
@@ -16,7 +21,9 @@ final class ParkingController
         private readonly JwtManager $jwt,
         private readonly GetParkingDetails $getParkingDetails,
         private readonly CheckAvailability $checkAvailability,
-        private readonly StationnementRepository $stationnementRepo
+        private readonly StationnementRepository $stationnementRepo,
+        private readonly SearchParkings $searchParkings,
+        private readonly ListParkings $listParkings
     ) {}
 
     public function jwt(): JwtManager
@@ -86,5 +93,33 @@ public function occupancyNow(): void
         Response::json(['success' => false, 'error' => $e->getMessage()], 404);
     }
 }
+// GET /api/parkings/search?lat=..&lng=..&radius=..&start_at=..&end_at=..
+public function search(): void
+{
+    try {
+        $data = [
+            'lat' => $_GET['lat'] ?? null,
+            'lng' => $_GET['lng'] ?? null,
+            'radius' => $_GET['radius'] ?? null,
+            'start_at' => $_GET['start_at'] ?? null,
+            'end_at' => $_GET['end_at'] ?? null,
+        ];
+
+        $result = $this->searchParkings->execute($data);
+        Response::json($result, 200);
+    } catch (\Throwable $e) {
+        Response::json(['success' => false, 'error' => $e->getMessage()], 400);
+    }
+}
+    // GET /api/parkings
+    public function list(): void
+    {
+        try {
+            $result = $this->listParkings->execute();
+            Response::json($result, 200);
+        } catch (\Throwable $e) {
+            Response::json(['success' => false, 'error' => $e->getMessage()], 500);
+        }
+    }
 
 }

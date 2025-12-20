@@ -12,6 +12,12 @@ interface ParkingRepository
 
     /** @return array<int, array<string,mixed>> */
     public function listByOwnerId(int $ownerId): array;
+
     public function findOwnerIdByParkingId(int $parkingId): ?int;
 
+    /** @return array<int, array<string, mixed>> */
+    public function searchNearby(float $lat, float $lng, float $radiusKm): array;
+
+    /** @return array<int, array<string, mixed>> */
+    public function listAll(): array;
 }

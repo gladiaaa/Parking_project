@@ -121,14 +121,37 @@ export const apiService = {
   // =====================
   // PARKINGS (strict: selon ton bootstrap)
   // =====================
-
-getParkingDetails(id) {
-  return request(withQuery("/parkings/details", { id }), { method: "GET" });
+getParkings() {
+  return request("/parkings", { method: "GET" });
 },
 
-  searchParkings(lat, lng, radius, startAt, endAt) {
+  getParkingDetails(id) {
+    return request(withQuery("/parkings/details", { id }), { method: "GET" });
+  },
+
+searchParkings(arg1, lng, radius, startAt, endAt) {
+  // Support: searchParkings({lat,lng,radius,start_at,end_at})
+  // OU: searchParkings(lat,lng,radius,startAt,endAt)
+  let lat;
+
+  if (typeof arg1 === "object" && arg1 !== null) {
+    lat = arg1.lat;
+    lng = arg1.lng;
+    radius = arg1.radius ?? arg1.radiusKm;
+    startAt = arg1.start_at ?? arg1.startAt;
+    endAt = arg1.end_at ?? arg1.endAt;
+  } else {
+    lat = arg1;
+  }
+
   return request(
-    withQuery("/parkings/search", { lat, lng, radius, start_at: startAt, end_at: endAt }),
+    withQuery("/parkings/search", {
+      lat,
+      lng,
+      radius,
+      start_at: startAt,
+      end_at: endAt,
+    }),
     { method: "GET" }
   );
 },
@@ -141,12 +164,15 @@ getParkingDetails(id) {
       }),
       { method: "GET" }
     );
+  
   },
 
-  getOccupancyNow() {
-    return request("/parkings/occupancy-now", { method: "GET" });
+  getOccupancyNow(parkingId) {
+    return request(
+      withQuery("/parkings/occupancy-now", { parking_id: parkingId }),
+      { method: "GET" }
+    );
   },
-
 
 
   // =====================
