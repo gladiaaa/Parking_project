@@ -1,9 +1,22 @@
+// Login.jsx
 import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
 import { apiService } from "../services/apiService";
 import { notifyAuthChanged } from "../services/authStore";
+
+function normalizeRole(role) {
+  return String(role || "")
+    .trim()
+    .toLowerCase()
+    .replace(/^role_/, ""); // support "ROLE_OWNER"
+}
+
+function isOwnerRole(role) {
+  const r = normalizeRole(role);
+  return r === "owner";
+}
 
 export default function Login() {
   const navigate = useNavigate();
@@ -20,43 +33,29 @@ export default function Login() {
 
     const normalizedEmail = email.trim().toLowerCase();
 
-    if (!normalizedEmail || !password) {
-      setError("Veuillez remplir tous les champs");
-      return;
-    }
-    if (!normalizedEmail.includes("@")) {
-      setError("Veuillez entrer une adresse email valide");
-      return;
-    }
-    if (password.length < 6) {
-      setError("Le mot de passe doit contenir au moins 6 caractères");
-      return;
-    }
+    if (!normalizedEmail || !password) return setError("Veuillez remplir tous les champs");
+    if (!normalizedEmail.includes("@")) return setError("Veuillez entrer une adresse email valide");
+    if (password.length < 6) return setError("Le mot de passe doit contenir au moins 6 caractères");
 
     setLoading(true);
 
     try {
-      // 1) Login => le backend pose les cookies
+      // 1) Login => cookies posés par le backend
       await apiService.login(normalizedEmail, password);
 
-      // 2) On récupère l'utilisateur via cookie
+      // 2) Me => user récupéré via cookie
       const me = await apiService.me();
-
-      // Selon ton backend, adapte si besoin:
-      // - soit me = { id, email, role, firstname, lastname }
-      // - soit me = { success: true, user: {...} }
       const user = me?.user ?? me;
 
       if (!user?.role) {
         throw new Error("Connexion OK mais utilisateur introuvable (réponse /me inattendue)");
       }
 
-      // Optionnel: garder une copie pour afficher le prénom sans refaire /me partout
       localStorage.setItem("user", JSON.stringify(user));
       notifyAuthChanged();
 
       // 3) Redirect
-      if (user.role === "OWNER") {
+      if (isOwnerRole(user.role)) {
         navigate("/dashboard-owner", { replace: true });
       } else {
         navigate("/dashboard-user", { replace: true });

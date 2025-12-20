@@ -5,11 +5,37 @@ import Footer from "../components/Footer";
 import { apiService } from "../services/apiService";
 import { notifyAuthChanged } from "../services/authStore";
 
-function ymNow() {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  return `${y}-${m}`;
+const initialParkingForm = {
+  latitude: "",
+  longitude: "",
+  capacity: "",
+  hourly_rate: "",
+  opening_time: "08:00:00",
+  closing_time: "22:00:00",
+};
+
+function toNumber(v) {
+  if (v === "" || v === null || v === undefined) return null;
+  const n = Number(String(v).replace(",", "."));
+  return Number.isFinite(n) ? n : null;
+}
+
+function normalizeRole(role) {
+  // Backend parfois "OWNER" / "owner"
+  return String(role || "").toLowerCase();
+}
+
+function pickOwnerParkings(res) {
+  // selon les variantes possibles:
+  // - { success:true, parkings:[...] }
+  // - { parkings:[...] }
+  // - { data:[...] }
+  // - direct [...]
+  return (
+    res?.parkings ??
+    res?.data ??
+    (Array.isArray(res) ? res : [])
+  );
 }
 
 export default function OwnerDashboard() {
@@ -17,153 +43,133 @@ export default function OwnerDashboard() {
 
   const [me, setMe] = useState(null);
   const [parkings, setParkings] = useState([]);
+
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
   const [showAddForm, setShowAddForm] = useState(false);
+  const [newParking, setNewParking] = useState(initialParkingForm);
 
-  const [monthlyRevenue, setMonthlyRevenue] = useState(0);
-  const [activeReservations, setActiveReservations] = useState(0);
-  const [activeStationnements, setActiveStationnements] = useState(0);
-
-  const [newParking, setNewParking] = useState({
-    nom: "",
-    adresse: "",
-    nombre_places: "",
-    tarif_horaire: "",
-    tarif_journalier: "",
-    tarif_mensuel: "",
-    horaire_ouverture: "",
-    horaire_fermeture: "",
-  });
-
-  const month = useMemo(() => ymNow(), []);
+  const parkingsCount = useMemo(() => parkings?.length ?? 0, [parkings]);
 
   useEffect(() => {
-    let alive = true;
+    bootstrap();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-    (async () => {
-      setLoading(true);
-      setError("");
-
-      try {
-        // 1) Vérifier session + rôle
-        const meRes = await apiService.me();
-        const user = meRes?.user ?? meRes;
-
-        if (!user?.role) throw new Error("Réponse /me invalide (pas de role).");
-        if (user.role !== "owner") {
-          navigate("/dashboard-user", { replace: true });
-          return;
-        }
-
-        if (!alive) return;
-        setMe(user);
-
-        // 2) Charger données owner
-        const p = await apiService.getOwnerParkings(); // { ... } ou array selon ton backend
-        const parkingsList = p?.parkings ?? p?.data ?? p ?? [];
-        if (!alive) return;
-        setParkings(Array.isArray(parkingsList) ? parkingsList : []);
-
-        // 3) Stats (si tu as les routes). Sinon, tu peux supprimer cette section.
-        // Ici: revenue par parking (doc: /owner/parkings/{id}/revenue?month=YYYY-MM)
-        // On additionne les revenus de tous les parkings.
-        const ids = (Array.isArray(parkingsList) ? parkingsList : [])
-          .map((x) => x?.id)
-          .filter(Boolean);
-
-        let total = 0;
-
-        for (const id of ids) {
-          try {
-            const r = await apiService.getOwnerMonthlyRevenue(id, month);
-            const val = r?.revenus_mensuels ?? r?.revenue ?? r?.amount ?? 0;
-            total += Number(val) || 0;
-          } catch {
-            // on ignore un parking qui fail, parce que la vie est déjà assez pénible
-          }
-        }
-
-        if (!alive) return;
-        setMonthlyRevenue(total);
-
-        // Si tu as des endpoints “active reservations / stationnements”, branche-les ici.
-        // Sinon laisse à 0.
-        setActiveReservations(0);
-        setActiveStationnements(0);
-      } catch (e) {
-        // 401 => pas connecté
-        if (e?.status === 401) {
-          localStorage.removeItem("user");
-          notifyAuthChanged();
-          navigate("/login", { replace: true });
-          return;
-        }
-        setError(e?.message || "Erreur lors du chargement");
-      } finally {
-        if (alive) setLoading(false);
-      }
-    })();
-
-    return () => {
-      alive = false;
-    };
-  }, [navigate, month]);
-
-  const handleAddParking = async (e) => {
-    e.preventDefault();
+  async function bootstrap() {
+    setLoading(true);
     setError("");
 
     try {
-      // Doc: POST /api/owner/parkings
-      await apiService.createOwnerParking({
-        ...newParking,
-        nombre_places: Number(newParking.nombre_places),
-        tarif_horaire: Number(newParking.tarif_horaire),
-        tarif_journalier: Number(newParking.tarif_journalier),
-        tarif_mensuel: Number(newParking.tarif_mensuel),
-      });
+      // 1) session via cookie
+      const meResult = await apiService.me();
+      const user = meResult?.user ?? meResult;
+
+      if (!user?.role) throw new Error("Réponse /me inattendue");
+
+      // keep in LS for UI (Header)
+      localStorage.setItem("user", JSON.stringify(user));
+      notifyAuthChanged();
+
+      const role = normalizeRole(user.role);
+      if (role !== "owner") {
+        // si user normal, on l’envoie où il faut
+        navigate("/dashboard-user", { replace: true });
+        return;
+      }
+
+      setMe(user);
+
+      // 2) load parkings
+      await loadOwnerParkings();
+    } catch (e) {
+      // pas loggé / cookie expiré
+      navigate("/login", { replace: true });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function loadOwnerParkings() {
+    const res = await apiService.getOwnerParkings();
+    const list = pickOwnerParkings(res);
+    setParkings(Array.isArray(list) ? list : []);
+  }
+
+  function updateNewParkingField(name, value) {
+    setNewParking((p) => ({ ...p, [name]: value }));
+  }
+
+  async function handleAddParking(e) {
+    e.preventDefault();
+    setError("");
+
+    const payload = {
+      latitude: toNumber(newParking.latitude),
+      longitude: toNumber(newParking.longitude),
+      capacity: toNumber(newParking.capacity),
+      hourly_rate: toNumber(newParking.hourly_rate),
+      opening_time: newParking.opening_time,
+      closing_time: newParking.closing_time,
+    };
+
+    // validations basiques
+    if (payload.latitude === null || payload.longitude === null) {
+      setError("Latitude et longitude sont obligatoires (nombres valides).");
+      return;
+    }
+    if (payload.capacity === null || payload.capacity <= 0) {
+      setError("La capacité doit être > 0.");
+      return;
+    }
+    if (payload.hourly_rate === null || payload.hourly_rate < 0) {
+      setError("Le tarif horaire doit être un nombre valide (>= 0).");
+      return;
+    }
+    if (!payload.opening_time || !payload.closing_time) {
+      setError("Les horaires d'ouverture et fermeture sont obligatoires.");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      await apiService.createOwnerParking(payload);
 
       setShowAddForm(false);
-      setNewParking({
-        nom: "",
-        adresse: "",
-        nombre_places: "",
-        tarif_horaire: "",
-        tarif_journalier: "",
-        tarif_mensuel: "",
-        horaire_ouverture: "",
-        horaire_fermeture: "",
-      });
+      setNewParking(initialParkingForm);
 
-      // Reload simple: recharger la page owner (ou refactor en loadData)
-      window.location.reload();
+      await loadOwnerParkings();
     } catch (e2) {
-      setError(e2?.message || "Erreur lors de l'ajout du parking");
+      setError(e2?.message || "Erreur lors de la création du parking.");
+    } finally {
+      setSubmitting(false);
     }
-  };
+  }
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
       <Header />
 
       <main className="flex-1">
+        {/* HERO */}
         <section className="bg-zenpark text-white py-12">
           <div className="container mx-auto px-6 lg:px-12">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-6">
               <div>
                 <h1 className="text-4xl font-serif font-normal mb-2">
                   Espace propriétaire
                 </h1>
                 <p className="text-white/90 text-lg">
-                  {me ? `Bonjour ${me.firstname || ""}` : "Chargement..."}
+                  {me?.firstname ? `Bonjour ${me.firstname}. ` : ""}
+                  Gérez vos parkings.
                 </p>
               </div>
 
               <button
                 onClick={() => setShowAddForm(true)}
-                className="hidden md:block bg-white text-zenpark px-6 py-3 rounded-xl hover:bg-gray-100 transition font-medium"
+                className="hidden md:inline-flex bg-white text-zenpark px-6 py-3 rounded-xl hover:bg-gray-100 transition font-medium"
               >
                 + Ajouter un parking
               </button>
@@ -178,25 +184,17 @@ export default function OwnerDashboard() {
             </div>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-            <div className="bg-white rounded-2xl shadow p-6">
-              <h3 className="text-sm text-gray-600 mb-2">Revenus mensuels</h3>
-              <p className="text-3xl font-bold text-zenpark">
-                {Number(monthlyRevenue || 0).toFixed(2)} €
-              </p>
-            </div>
-
-            <div className="bg-white rounded-2xl shadow p-6">
-              <h3 className="text-sm text-gray-600 mb-2">Réservations en cours</h3>
-              <p className="text-3xl font-bold text-zenpark">{activeReservations}</p>
-            </div>
-
-            <div className="bg-white rounded-2xl shadow p-6">
-              <h3 className="text-sm text-gray-600 mb-2">Stationnements actifs</h3>
-              <p className="text-3xl font-bold text-zenpark">{activeStationnements}</p>
-            </div>
+          {/* CTA mobile */}
+          <div className="md:hidden mb-8">
+            <button
+              onClick={() => setShowAddForm(true)}
+              className="w-full bg-zenpark text-white px-6 py-3 rounded-xl hover:bg-zenpark-700 transition font-medium"
+            >
+              + Ajouter un parking
+            </button>
           </div>
 
+          {/* FORM ADD */}
           {showAddForm && (
             <div className="bg-white rounded-2xl shadow p-8 mb-12">
               <h2 className="text-2xl font-serif font-normal mb-6 text-gray-900">
@@ -204,87 +202,109 @@ export default function OwnerDashboard() {
               </h2>
 
               <form onSubmit={handleAddParking} className="space-y-6">
-                {/* garde ton form tel quel, juste bindings */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <input
-                    value={newParking.nom}
-                    onChange={(e) => setNewParking({ ...newParking, nom: e.target.value })}
-                    placeholder="Nom"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl"
-                    required
-                  />
-                  <input
-                    value={newParking.adresse}
-                    onChange={(e) => setNewParking({ ...newParking, adresse: e.target.value })}
-                    placeholder="Adresse"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl"
-                    required
-                  />
-                  <input
-                    type="number"
-                    min="1"
-                    value={newParking.nombre_places}
-                    onChange={(e) => setNewParking({ ...newParking, nombre_places: e.target.value })}
-                    placeholder="Nombre de places"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl"
-                    required
-                  />
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={newParking.tarif_horaire}
-                    onChange={(e) => setNewParking({ ...newParking, tarif_horaire: e.target.value })}
-                    placeholder="Tarif horaire"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl"
-                    required
-                  />
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={newParking.tarif_journalier}
-                    onChange={(e) => setNewParking({ ...newParking, tarif_journalier: e.target.value })}
-                    placeholder="Tarif journalier"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl"
-                    required
-                  />
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={newParking.tarif_mensuel}
-                    onChange={(e) => setNewParking({ ...newParking, tarif_mensuel: e.target.value })}
-                    placeholder="Tarif mensuel"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl"
-                    required
-                  />
-                  <input
-                    type="time"
-                    value={newParking.horaire_ouverture}
-                    onChange={(e) => setNewParking({ ...newParking, horaire_ouverture: e.target.value })}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl"
-                    required
-                  />
-                  <input
-                    type="time"
-                    value={newParking.horaire_fermeture}
-                    onChange={(e) => setNewParking({ ...newParking, horaire_fermeture: e.target.value })}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl"
-                    required
-                  />
+                  <div>
+                    <label className="block text-gray-700 font-medium mb-2">
+                      Latitude
+                    </label>
+                    <input
+                      type="text"
+                      value={newParking.latitude}
+                      onChange={(e) => updateNewParkingField("latitude", e.target.value)}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-zenpark focus:border-zenpark transition"
+                      placeholder="48.8566"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-gray-700 font-medium mb-2">
+                      Longitude
+                    </label>
+                    <input
+                      type="text"
+                      value={newParking.longitude}
+                      onChange={(e) => updateNewParkingField("longitude", e.target.value)}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-zenpark focus:border-zenpark transition"
+                      placeholder="2.3522"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-gray-700 font-medium mb-2">
+                      Capacité (places)
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={newParking.capacity}
+                      onChange={(e) => updateNewParkingField("capacity", e.target.value)}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-zenpark focus:border-zenpark transition"
+                      placeholder="10"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-gray-700 font-medium mb-2">
+                      Tarif horaire (€)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={newParking.hourly_rate}
+                      onChange={(e) => updateNewParkingField("hourly_rate", e.target.value)}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-zenpark focus:border-zenpark transition"
+                      placeholder="2.50"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-gray-700 font-medium mb-2">
+                      Heure d'ouverture
+                    </label>
+                    <input
+                      type="time"
+                      value={newParking.opening_time}
+                      onChange={(e) => updateNewParkingField("opening_time", e.target.value)}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-zenpark focus:border-zenpark transition"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-gray-700 font-medium mb-2">
+                      Heure de fermeture
+                    </label>
+                    <input
+                      type="time"
+                      value={newParking.closing_time}
+                      onChange={(e) => updateNewParkingField("closing_time", e.target.value)}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-zenpark focus:border-zenpark transition"
+                      required
+                    />
+                  </div>
                 </div>
 
-                <div className="flex gap-4">
+                <div className="flex flex-col md:flex-row gap-4">
                   <button
                     type="submit"
-                    className="bg-zenpark text-white px-8 py-3 rounded-xl hover:bg-zenpark-700 transition font-medium"
+                    disabled={submitting}
+                    className="bg-zenpark text-white px-8 py-3 rounded-xl hover:bg-zenpark-700 transition font-medium disabled:opacity-50"
                   >
-                    Ajouter le parking
+                    {submitting ? "Création..." : "Ajouter le parking"}
                   </button>
+
                   <button
                     type="button"
-                    onClick={() => setShowAddForm(false)}
+                    onClick={() => {
+                      setShowAddForm(false);
+                      setNewParking(initialParkingForm);
+                      setError("");
+                    }}
                     className="bg-gray-200 text-gray-700 px-8 py-3 rounded-xl hover:bg-gray-300 transition font-medium"
                   >
                     Annuler
@@ -294,19 +314,20 @@ export default function OwnerDashboard() {
             </div>
           )}
 
+          {/* LIST */}
           <section>
             <h2 className="text-3xl font-serif font-normal mb-6 text-gray-900">
-              Mes parkings ({parkings.length})
+              Mes parkings ({parkingsCount})
             </h2>
 
             {loading ? (
               <div className="bg-white rounded-2xl shadow p-12 text-center">
                 <p className="text-gray-600">Chargement...</p>
               </div>
-            ) : parkings.length === 0 ? (
+            ) : parkingsCount === 0 ? (
               <div className="bg-white rounded-2xl shadow p-12 text-center">
                 <p className="text-gray-600 mb-6">
-                  Vous n'avez pas encore de parking. Ajoutez-en un.
+                  Aucun parking pour l’instant. Crée-en un, ça rendra l’univers légèrement moins inutile.
                 </p>
                 <button
                   onClick={() => setShowAddForm(true)}
@@ -317,24 +338,48 @@ export default function OwnerDashboard() {
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {parkings.map((parking) => (
-                  <div key={parking.id} className="bg-white rounded-2xl shadow p-6">
-                    <h3 className="text-xl font-semibold text-gray-900 mb-3">
-                      {parking.nom}
+                {parkings.map((p) => (
+                  <div key={p.id ?? `${p.latitude}-${p.longitude}`} className="bg-white rounded-2xl shadow p-6">
+                    <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                      Parking #{p.id ?? "—"}
                     </h3>
-                    <p className="text-gray-600 text-sm mb-4">{parking.adresse}</p>
-                    <div className="space-y-2 mb-4 text-sm">
+
+                    <div className="space-y-2 text-sm">
                       <div className="flex justify-between">
-                        <span className="text-gray-600">Places:</span>
-                        <span className="font-medium">{parking.nombre_places}</span>
+                        <span className="text-gray-600">Latitude</span>
+                        <span className="font-medium">{p.latitude}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-gray-600">Tarif horaire:</span>
+                        <span className="text-gray-600">Longitude</span>
+                        <span className="font-medium">{p.longitude}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Capacité</span>
+                        <span className="font-medium">{p.capacity}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Tarif horaire</span>
                         <span className="font-medium text-zenpark">
-                          {parking.tarif_horaire} €
+                          {p.hourly_rate} €
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Horaires</span>
+                        <span className="font-medium">
+                          {p.opening_time} - {p.closing_time}
                         </span>
                       </div>
                     </div>
+
+                    {/* bouton futur si tu fais une page de gestion */}
+                    {/* <div className="mt-5">
+                      <button
+                        onClick={() => navigate(`/owner/parkings/${p.id}`)}
+                        className="w-full bg-gray-100 text-gray-900 py-2 rounded-xl hover:bg-gray-200 transition font-medium"
+                      >
+                        Gérer ce parking
+                      </button>
+                    </div> */}
                   </div>
                 ))}
               </div>

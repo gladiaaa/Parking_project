@@ -192,16 +192,20 @@ export const apiService = {
   // OWNER
   // =====================
 
-  getOwnerParkings() {
-    return request("/owner/parkings", { method: "GET" });
-  },
+// OWNER
 
-  createOwnerParking(parkingData) {
-    return request("/owner/parkings", {
-      method: "POST",
-      body: parkingData,
-    });
-  },
+getOwnerParkings() {
+  return request("/owner/parkings", { method: "GET" });
+},
+
+createOwnerParking(parkingData) {
+  // parkingData: { latitude, longitude, capacity, hourly_rate, opening_time, closing_time }
+  return request("/owner/parkings", {
+    method: "POST",
+    body: parkingData,
+  });
+},
+
 
   getOwnerParkingReservations(id, { from, to } = {}) {
     return request(

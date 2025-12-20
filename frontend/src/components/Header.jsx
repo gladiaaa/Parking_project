@@ -1,7 +1,16 @@
+// src/components/Header.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { apiService } from "../services/apiService";
 import { getAuthSnapshot, subscribeAuth, notifyAuthChanged } from "../services/authStore";
+
+function normalizeRole(role) {
+  if (!role) return null;
+  const r = String(role).trim().toLowerCase();
+  // accepte "OWNER", "owner", "ROLE_OWNER", etc.
+  if (r.includes("owner")) return "owner";
+  return "user";
+}
 
 export default function Header() {
   const navigate = useNavigate();
@@ -10,27 +19,43 @@ export default function Header() {
   const [auth, setAuth] = useState(() => getAuthSnapshot());
 
   useEffect(() => {
-    // s'abonner au store
+    // On s'abonne au store d'auth (pour re-render dès login/logout)
     const unsub = subscribeAuth(() => setAuth(getAuthSnapshot()));
     return unsub;
   }, []);
 
-  const { isAuthenticated, user, role } = auth;
+  const isAuthenticated = !!auth?.isAuthenticated;
+  const user = auth?.user ?? null;
+  const role = normalizeRole(auth?.role ?? user?.role);
+
+  const isHome = location.pathname === "/";
 
   const dashboardPath = useMemo(() => {
     if (!isAuthenticated) return null;
     return role === "owner" ? "/dashboard-owner" : "/dashboard-user";
   }, [isAuthenticated, role]);
 
-  const isHome = location.pathname === "/";
+  const handleAnchorNav = (hash) => (e) => {
+    e.preventDefault();
+
+    // Si on n'est pas sur la home, on navigue vers la home + hash
+    if (!isHome) {
+      navigate(`/${hash}`);
+      return;
+    }
+
+    // Sinon scroll smooth
+    document.querySelector(hash)?.scrollIntoView({ behavior: "smooth" });
+  };
 
   const handleLogout = async () => {
     try {
-      // best effort: on demande au backend de clear les cookies
+      // best effort: demander au backend de clear les cookies
       await apiService.logout();
     } catch {
-      // si ça fail, on s'en remet quand même: côté UI tu es déconnecté
+      // on s'en fout: côté UI on te déconnecte quand même
     } finally {
+      // On garde juste user en local (pas de token, car cookies côté backend)
       localStorage.removeItem("user");
       notifyAuthChanged();
       navigate("/", { replace: true });
@@ -47,7 +72,7 @@ export default function Header() {
           </div>
         </Link>
 
-        {/* Nav centrale */}
+        {/* Navigation centrale */}
         <nav className="flex items-center bg-gray-900 rounded-full shadow-2xl px-2 py-2">
           <Link
             to="/"
@@ -77,14 +102,9 @@ export default function Header() {
             Carte
           </Link>
 
-          {/* Ces ancres n'ont de sens que sur la home */}
           <a
             href="#services"
-            onClick={(e) => {
-              e.preventDefault();
-              if (!isHome) return navigate("/#services");
-              document.querySelector("#services")?.scrollIntoView({ behavior: "smooth" });
-            }}
+            onClick={handleAnchorNav("#services")}
             className="px-6 py-2.5 text-white font-light text-sm transition-all duration-300 hover:text-gray-300 cursor-pointer"
           >
             Services
@@ -92,11 +112,7 @@ export default function Header() {
 
           <a
             href="#tarifs"
-            onClick={(e) => {
-              e.preventDefault();
-              if (!isHome) return navigate("/#tarifs");
-              document.querySelector("#tarifs")?.scrollIntoView({ behavior: "smooth" });
-            }}
+            onClick={handleAnchorNav("#tarifs")}
             className="px-6 py-2.5 text-white font-light text-sm transition-all duration-300 hover:text-gray-300 cursor-pointer"
           >
             Tarifs
@@ -106,14 +122,25 @@ export default function Header() {
         {/* Actions à droite */}
         {isAuthenticated ? (
           <div className="flex items-center gap-3">
+            {/* OWNER */}
             {role === "owner" ? (
-              <Link
-                to="/dashboard-owner"
-                className="bg-gray-900 text-white px-6 py-2.5 rounded-full font-light text-sm shadow-lg hover:bg-gray-800 transition-all duration-300"
-              >
-                Dashboard
-              </Link>
+              <>
+                <Link
+                  to="/dashboard-owner"
+                  className="text-gray-900 bg-white border border-gray-200 px-6 py-2.5 rounded-full font-light text-sm shadow-lg hover:bg-gray-50 transition-all duration-300"
+                >
+                  Mes parkings
+                </Link>
+
+                <Link
+                  to="/dashboard-owner"
+                  className="bg-gray-900 text-white px-6 py-2.5 rounded-full font-light text-sm shadow-lg hover:bg-gray-800 transition-all duration-300"
+                >
+                  Mon compte
+                </Link>
+              </>
             ) : (
+              /* USER */
               <>
                 <Link
                   to="/mes-reservations"
@@ -121,6 +148,7 @@ export default function Header() {
                 >
                   Mes réservations
                 </Link>
+
                 <Link
                   to="/dashboard-user"
                   className="bg-gray-900 text-white px-6 py-2.5 rounded-full font-light text-sm shadow-lg hover:bg-gray-800 transition-all duration-300"
@@ -133,6 +161,7 @@ export default function Header() {
             <button
               onClick={handleLogout}
               className="bg-primary text-white px-6 py-2.5 rounded-full font-light text-sm shadow-lg hover:bg-primary-800 transition-all duration-300"
+              type="button"
             >
               Déconnexion{user?.firstname ? ` (${user.firstname})` : ""}
             </button>
