@@ -6,26 +6,38 @@ namespace Tests\Controller;
 use App\Controller\ReservationController;
 use App\Domain\Repository\ReservationRepository;
 use App\Infrastructure\Security\JwtManager;
-use App\UseCase\CreateReservation;
+use App\UseCase\CreateReservationInterface;
 use App\UseCase\Reservation\EnterReservation;
 use App\UseCase\Reservation\ExitReservation;
 use App\UseCase\Reservation\GetInvoiceHtml;
-use PHPUnit\Framework\TestCase;
 use PHPUnit\Framework\MockObject\MockObject;
+use PHPUnit\Framework\TestCase;
 
-class ReservationControllerTest extends TestCase
+final class ReservationControllerTest extends TestCase
 {
     private ReservationController $controller;
-    private MockObject&CreateReservation $createReservation;
-    private MockObject&ReservationRepository $repository;
-    private MockObject&JwtManager $jwtManager;
-    private MockObject&EnterReservation $enterReservation;
-    private MockObject&ExitReservation $exitReservation;
-    private MockObject&GetInvoiceHtml $getInvoiceHtml;
+
+    /** @var MockObject&CreateReservationInterface */
+    private MockObject $createReservation;
+
+    /** @var MockObject&ReservationRepository */
+    private MockObject $repository;
+
+    /** @var MockObject&JwtManager */
+    private MockObject $jwtManager;
+
+    /** @var MockObject&EnterReservation */
+    private MockObject $enterReservation;
+
+    /** @var MockObject&ExitReservation */
+    private MockObject $exitReservation;
+
+    /** @var MockObject&GetInvoiceHtml */
+    private MockObject $getInvoiceHtml;
 
     protected function setUp(): void
     {
-        $this->createReservation = $this->createMock(CreateReservation::class);
+        $this->createReservation = $this->createMock(CreateReservationInterface::class);
         $this->repository = $this->createMock(ReservationRepository::class);
         $this->jwtManager = $this->createMock(JwtManager::class);
         $this->enterReservation = $this->createMock(EnterReservation::class);
@@ -47,16 +59,13 @@ class ReservationControllerTest extends TestCase
      */
     public function testMyReservationsSuccess(): void
     {
-
         $this->jwtManager->method('readAccessFromCookie')
             ->willReturn(['sub' => 42, 'typ' => 'access']);
-
 
         $this->repository->expects($this->once())
             ->method('findByUserId')
             ->with(42)
             ->willReturn([]);
-
 
         ob_start();
         $this->controller->myReservations();
@@ -88,6 +97,8 @@ class ReservationControllerTest extends TestCase
         $result = ob_get_clean();
 
         $data = json_decode($result, true);
+
+        $this->assertIsArray($data);
         $this->assertTrue($data['success']);
         $this->assertEquals(100, $data['stationnement_id']);
     }
@@ -100,13 +111,12 @@ class ReservationControllerTest extends TestCase
         $this->jwtManager->method('readAccessFromCookie')
             ->willReturn(null);
 
-        $this->expectOutputContains('Unauthorized');
-
+        $this->expectOutputRegex('/Unauthorized/i');
 
         try {
             $this->controller->myReservations();
-        } catch (\Throwable $e) {
-            // Gérer l'exit si nécessaire
+        } catch (\Throwable) {
+            // Si le code appelle app_exit() / exit, on ignore ici.
         }
     }
 }

@@ -94,7 +94,7 @@ function pdo(): PDO
 cors();
 if (($_SERVER['REQUEST_METHOD'] ?? '') === 'OPTIONS') {
     http_response_code(204);
-    exit;
+    app_exit();
 }
 
 // =====================
@@ -249,3 +249,11 @@ $router
     ->post('/api/reservations/{id}/exit', [$reservationController, 'exit'])
     ->get('/api/reservations/{id}/invoice', [$reservationController, 'invoice']);
 
+
+function app_exit(): void
+{
+    if (defined('APP_TESTING')) {
+        return;
+    }
+    exit;
+}

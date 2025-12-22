@@ -7,8 +7,9 @@ use App\Domain\Entity\Reservation;
 use App\Domain\Repository\ParkingRepository;
 use App\Domain\Repository\ReservationRepository;
 use App\UseCase\Parking\CalculateOccupancy;
+use App\UseCase\CreateReservationInterface;
 
-final class CreateReservation
+final class CreateReservation implements CreateReservationInterface
 {
     public function __construct(
         private readonly ParkingRepository $parkingRepo,
@@ -29,7 +30,6 @@ final class CreateReservation
             throw new \RuntimeException('Parking not found');
         }
 
-        // validation dates (sinon tu vas créer des réservations débiles)
         $start = new \DateTimeImmutable($startAt);
         $end   = new \DateTimeImmutable($endAt);
         if ($end <= $start) {
@@ -38,7 +38,6 @@ final class CreateReservation
 
         $capacity = $parking->capacity();
 
-        // ✅ Occupation pour une nouvelle réservation = voitures déjà présentes + réservations du créneau pas encore entrées
         $occupied = $this->occupancy->totalForAvailability(
             $parkingId,
             $start->format('Y-m-d H:i:s'),

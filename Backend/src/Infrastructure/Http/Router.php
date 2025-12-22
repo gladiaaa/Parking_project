@@ -124,12 +124,12 @@ public function dispatch(string $method, string $path): void
                     continue;
                 } catch (\Throwable) {
                     Response::json(['error' => 'Controller JWT is not accessible'], 500);
-                    exit;
+                    app_exit();
                 }
             }
 
             Response::json(['error' => 'Controller missing JWT'], 500);
-            exit;
+            app_exit();
         }
     }
 

@@ -6,7 +6,7 @@ namespace App\UseCase\Auth;
 use App\Domain\Repository\UserRepository;
 use App\Infrastructure\Security\PasswordHasher;
 
-final class RegisterUser
+final class RegisterUser implements RegisterUserInterface
 {
     public function __construct(
         private UserRepository $repo,

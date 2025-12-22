@@ -5,7 +5,7 @@ namespace App\UseCase\Auth;
 
 use App\Domain\Repository\UserRepository;
 
-final class StartTwoFactor
+final class StartTwoFactor implements StartTwoFactorInterface
 {
     public function __construct(
         private UserRepository $userRepository,

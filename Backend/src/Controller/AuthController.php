@@ -3,45 +3,47 @@ declare(strict_types=1);
 
 namespace App\Controller;
 
+use App\Infrastructure\Http\Request;
 use App\Infrastructure\Http\Response;
-use App\Infrastructure\Security\JwtManager;
-use App\UseCase\Auth\LoginUser;
-use App\UseCase\Auth\RefreshToken;
-use App\UseCase\Auth\RegisterUser;
-use App\UseCase\Auth\StartTwoFactor;
+use App\Infrastructure\Security\JwtManagerInterface;
+use App\UseCase\Auth\LoginUserInterface;
+use App\UseCase\Auth\RefreshTokenInterface;
+use App\UseCase\Auth\RegisterUserInterface;
+use App\UseCase\Auth\StartTwoFactorInterface;
 
 final class AuthController
 {
     public function __construct(
-        private LoginUser $loginUser,
-        private RefreshToken $refreshToken,
-        private RegisterUser $registerUser,
-        private StartTwoFactor $startTwoFactor,
-        private JwtManager $jwt,
+        private LoginUserInterface $loginUser,
+        private RefreshTokenInterface $refreshToken,
+        private RegisterUserInterface $registerUser,
+        private StartTwoFactorInterface $startTwoFactor,
+        private JwtManagerInterface $jwt,
     ) {
     }
 
     /** POST /api/auth/login */
     public function login(): void
     {
-        $data = json_decode(file_get_contents('php://input'), true) ?? [];
+        $data = $this->readJsonBody();
+
         $email = (string) ($data['email'] ?? '');
         $password = (string) ($data['password'] ?? '');
 
         try {
             $result = $this->loginUser->execute($email, $password);
 
-            if (!$result['success']) {
+            if (empty($result['success'])) {
                 Response::json(['error' => 'Invalid credentials'], 401);
                 return;
             }
 
-            // Si 2FA requise : pas de JWT définitifs, juste un pending token
-            if (!empty($result['two_factor_required']) && $result['two_factor_required'] === true) {
-                $userId = $result['user_id'];
+            // 2FA requis
+            if (!empty($result['two_factor_required'])) {
+                $userId = $result['user_id'] ?? 0;
 
-                $p2 = $this->jwt->issuePending2FAToken($userId);
-                $this->jwt->setPending2FACookie($p2);
+                $pending = $this->jwt->issuePending2FAToken($userId);
+                $this->jwt->setPending2FACookie($pending);
 
                 $this->startTwoFactor->execute($userId);
 
@@ -49,9 +51,9 @@ final class AuthController
                 return;
             }
 
-            // Pas de 2FA → on génère les vrais tokens
-            $userId = $result['user_id'];
-            $role = $result['role'];
+            // Pas de 2FA → JWT définitifs
+            $userId = $result['user_id'] ?? 0;
+            $role = (string) ($result['role'] ?? 'USER');
 
             [$access, $refresh] = $this->jwt->issueFor($userId, $role);
             $this->jwt->setAccessCookie($access);
@@ -65,40 +67,42 @@ final class AuthController
 
     /** POST /api/auth/register */
     public function register(): void
-{
-    $data = json_decode(file_get_contents('php://input'), true) ?? [];
+    {
+        $data = $this->readJsonBody();
 
-    $email = $data['email'] ?? '';
-    $password = $data['password'] ?? '';
-    $role = $data['role'] ?? 'USER';
-    $firstname = $data['firstname'] ?? null;
-    $lastname = $data['lastname'] ?? null;
+        $email = (string) ($data['email'] ?? '');
+        $password = (string) ($data['password'] ?? '');
+        $role = strtoupper((string) ($data['role'] ?? 'USER'));
+        $firstname = $data['firstname'] ?? null;
+        $lastname = $data['lastname'] ?? null;
 
-    try {
-        $user = $this->registerUser->execute(
-            $email,
-            $password,
-            strtoupper($role),
-            $firstname,
-            $lastname
-        );
+        try {
+            $user = $this->registerUser->execute(
+                $email,
+                $password,
+                $role,
+                $firstname,
+                $lastname
+            );
 
-        // Login automatique
-        [$access, $refresh] = $this->jwt->issueFor($user['id'], $user['role']);
-        $this->jwt->setAccessCookie($access);
-        $this->jwt->setRefreshCookie($refresh);
+            // Login automatique après inscription
+            $userId = $user['id'] ?? 0;
+            $userRole = (string) ($user['role'] ?? $role);
 
-        Response::json([
-            'success' => true,
-            'user' => $user,
-        ], 201);
+            [$access, $refresh] = $this->jwt->issueFor($userId, $userRole);
+            $this->jwt->setAccessCookie($access);
+            $this->jwt->setRefreshCookie($refresh);
 
-    } catch (\RuntimeException $e) {
-        Response::json(['error' => $e->getMessage()], 409);
-    } catch (\Throwable $e) {
-        Response::json(['error' => 'Error registering user'], 400);
+            Response::json([
+                'success' => true,
+                'user' => $user,
+            ], 201);
+        } catch (\RuntimeException $e) {
+            Response::json(['error' => $e->getMessage()], 409);
+        } catch (\Throwable) {
+            Response::json(['error' => 'Error registering user'], 400);
+        }
     }
-}
 
     /** POST /api/auth/refresh */
     public function refresh(): void
@@ -119,5 +123,20 @@ final class AuthController
     {
         $this->jwt->clearAuthCookies();
         Response::json(['ok' => true]);
+    }
+
+    /**
+     * Lit le body JSON.
+     * - En prod : Request::json()
+     * - En test : $GLOBALS['__TEST_RAW_BODY__'] (injecté par les tests)
+     */
+    private function readJsonBody(): array
+    {
+        if (isset($GLOBALS['__TEST_RAW_BODY__'])) {
+            $raw = (string) $GLOBALS['__TEST_RAW_BODY__'];
+            return json_decode($raw, true) ?? [];
+        }
+
+        return Request::json();
     }
 }

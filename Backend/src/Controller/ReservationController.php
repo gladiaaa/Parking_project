@@ -12,7 +12,9 @@ use App\UseCase\Reservation\EnterReservation;
 use App\UseCase\Reservation\ExitReservation;
 use App\UseCase\Reservation\GetInvoiceHtml;
 
-final class ReservationController
+use App\UseCase\CreateReservationInterface;
+
+private CreateReservationInterface $createReservation
 {
     public function __construct(
         private readonly CreateReservation $createReservation,
@@ -35,13 +37,13 @@ final class ReservationController
 
         if (!$payload || ($payload['typ'] ?? '') !== 'access') {
             Response::json(['error' => 'Unauthorized'], 401);
-            exit;
+            app_exit();
         }
 
         $userId = (int)($payload['sub'] ?? 0);
         if ($userId <= 0) {
             Response::json(['error' => 'Unauthorized'], 401);
-            exit;
+            app_exit();
         }
 
         return $userId;

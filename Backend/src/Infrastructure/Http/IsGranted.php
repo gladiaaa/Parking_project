@@ -16,7 +16,7 @@ final class IsGranted
 
         if (!$payload) {
             Response::json(['error' => 'Unauthorized'], 401);
-            exit;
+            app_exit();
         }
 
         // ✅ Normalisation: évite OWNER vs owner, USER vs user, etc.
@@ -31,7 +31,7 @@ final class IsGranted
 
         if (($ranks[$userRole] ?? 0) < ($ranks[$needed] ?? 99)) {
             Response::json(['error' => 'Forbidden'], 403);
-            exit;
+            app_exit();
         }
     }
 }

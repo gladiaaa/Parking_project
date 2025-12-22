@@ -1,33 +1,44 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Tests\Controller;
 
 use App\Controller\AuthController;
-use App\Infrastructure\Security\JwtManager;
-use App\UseCase\Auth\LoginUser;
-use App\UseCase\Auth\RefreshToken;
-use App\UseCase\Auth\RegisterUser;
-use App\UseCase\Auth\StartTwoFactor;
-use PHPUnit\Framework\TestCase;
+use App\Infrastructure\Security\JwtManagerInterface;
+use App\UseCase\Auth\LoginUserInterface;
+use App\UseCase\Auth\RefreshTokenInterface;
+use App\UseCase\Auth\RegisterUserInterface;
+use App\UseCase\Auth\StartTwoFactorInterface;
 use PHPUnit\Framework\MockObject\MockObject;
+use PHPUnit\Framework\TestCase;
 
-class AuthControllerTest extends TestCase
+final class AuthControllerTest extends TestCase
 {
-    private LoginUser|MockObject $loginUser;
-    private RefreshToken|MockObject $refreshToken;
-    private RegisterUser|MockObject $registerUser;
-    private StartTwoFactor|MockObject $startTwoFactor;
-    private JwtManager|MockObject $jwtManager;
+    private LoginUserInterface|MockObject $loginUser;
+    private RefreshTokenInterface|MockObject $refreshToken;
+    private RegisterUserInterface|MockObject $registerUser;
+    private StartTwoFactorInterface|MockObject $startTwoFactor;
+    private JwtManagerInterface|MockObject $jwtManager;
     private AuthController $controller;
+
+    private function mockBody(array $data): void
+    {
+        $GLOBALS['__TEST_RAW_BODY__'] = json_encode($data, JSON_THROW_ON_ERROR);
+    }
+
+    protected function tearDown(): void
+    {
+        unset($GLOBALS['__TEST_RAW_BODY__']);
+    }
 
     protected function setUp(): void
     {
-
-        $this->loginUser = $this->createMock(LoginUser::class);
-        $this->refreshToken = $this->createMock(RefreshToken::class);
-        $this->registerUser = $this->createMock(RegisterUser::class);
-        $this->startTwoFactor = $this->createMock(StartTwoFactor::class);
-        $this->jwtManager = $this->createMock(JwtManager::class);
+        $this->loginUser = $this->createMock(LoginUserInterface::class);
+        $this->refreshToken = $this->createMock(RefreshTokenInterface::class);
+        $this->registerUser = $this->createMock(RegisterUserInterface::class);
+        $this->startTwoFactor = $this->createMock(StartTwoFactorInterface::class);
+        $this->jwtManager = $this->createMock(JwtManagerInterface::class);
 
         $this->controller = new AuthController(
             $this->loginUser,
@@ -38,11 +49,12 @@ class AuthControllerTest extends TestCase
         );
     }
 
-    /**
-     * Test d'un login réussi sans 2FA
-     */
     public function testLoginSuccessWithout2FA(): void
     {
+        $this->mockBody([
+            'email' => 'test@example.com',
+            'password' => 'password123',
+        ]);
 
         $this->loginUser->expects($this->once())
             ->method('execute')
@@ -50,48 +62,58 @@ class AuthControllerTest extends TestCase
             ->willReturn([
                 'success' => true,
                 'two_factor_required' => false,
-                'user_id' => 'uuid-123',
-                'role' => 'ROLE_USER'
+                'user_id' => 123,
+                'role' => 'USER',
             ]);
 
         $this->jwtManager->expects($this->once())
             ->method('issueFor')
+            ->with(123, 'USER')
             ->willReturn(['access_token_str', 'refresh_token_str']);
 
-        $this->jwtManager->expects($this->once())->method('setAccessCookie');
-        $this->jwtManager->expects($this->once())->method('setRefreshCookie');
+        $this->jwtManager->expects($this->once())
+            ->method('setAccessCookie')
+            ->with('access_token_str');
 
+        $this->jwtManager->expects($this->once())
+            ->method('setRefreshCookie')
+            ->with('refresh_token_str');
 
-        // $this->controller->login();
+        $this->controller->login();
     }
 
-    /**
-     * Test du login quand la 2FA est requise
-     */
     public function testLoginRequires2FA(): void
     {
-        $this->loginUser->method('execute')->willReturn([
-            'success' => true,
-            'two_factor_required' => true,
-            'user_id' => 'uuid-123'
+        $this->mockBody([
+            'email' => 'test@example.com',
+            'password' => 'password123',
         ]);
 
-        // On vérifie que le token temporaire est généré
+        $this->loginUser->expects($this->once())
+            ->method('execute')
+            ->with('test@example.com', 'password123')
+            ->willReturn([
+                'success' => true,
+                'two_factor_required' => true,
+                'user_id' => 123,
+            ]);
+
         $this->jwtManager->expects($this->once())
             ->method('issuePending2FAToken')
+            ->with(123)
             ->willReturn('pending-token');
 
-        // On vérifie que la procédure 2FA (envoi code mail/sms) est lancée
+        $this->jwtManager->expects($this->once())
+            ->method('setPending2FACookie')
+            ->with('pending-token');
+
         $this->startTwoFactor->expects($this->once())
             ->method('execute')
-            ->with('uuid-123');
+            ->with(123);
 
-        // $this->controller->login();
+        $this->controller->login();
     }
 
-    /**
-     * Test du logout
-     */
     public function testLogoutClearsCookies(): void
     {
         $this->jwtManager->expects($this->once())
@@ -100,19 +122,40 @@ class AuthControllerTest extends TestCase
         $this->controller->logout();
     }
 
-    /**
-     * Test de l'inscription
-     */
     public function testRegisterSuccess(): void
     {
-        $userData = ['id' => 'new-uuid', 'role' => 'USER', 'email' => 'new@test.com'];
+        $this->mockBody([
+            'email' => 'new@test.com',
+            'password' => 'password123',
+            'role' => 'USER',
+            'firstname' => 'John',
+            'lastname' => 'Doe',
+        ]);
+
+        $userData = [
+            'id' => 999,
+            'role' => 'USER',
+            'email' => 'new@test.com',
+        ];
 
         $this->registerUser->expects($this->once())
             ->method('execute')
+            ->with('new@test.com', 'password123', 'USER', 'John', 'Doe')
             ->willReturn($userData);
 
-        $this->jwtManager->expects($this->once())->method('issueFor');
+        $this->jwtManager->expects($this->once())
+            ->method('issueFor')
+            ->with(999, 'USER')
+            ->willReturn(['access_token_str', 'refresh_token_str']);
 
-        // $this->controller->register();
+        $this->jwtManager->expects($this->once())
+            ->method('setAccessCookie')
+            ->with('access_token_str');
+
+        $this->jwtManager->expects($this->once())
+            ->method('setRefreshCookie')
+            ->with('refresh_token_str');
+
+        $this->controller->register();
     }
 }

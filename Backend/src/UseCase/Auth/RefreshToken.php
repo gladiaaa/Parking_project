@@ -6,7 +6,7 @@ namespace App\UseCase\Auth;
 use App\Infrastructure\Security\JwtManager;
 use App\Domain\Repository\UserRepository;
 
-final class RefreshToken
+final class RefreshToken implements RefreshTokenInterface
 {
   public function execute(): ?array
   {
