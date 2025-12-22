@@ -59,7 +59,6 @@ final class CreateSubscription
             throw new \RuntimeException('Parking not found');
         }
 
-        // Assure-toi que ton entity Parking expose bien hourlyRate()
         $hourlyRate = (float) $parking->hourlyRate();
 
         $amount = $this->computeSubscriptionAmount($sd, $ed, $weeklySlots, $hourlyRate);
@@ -113,9 +112,6 @@ final class CreateSubscription
 
     /**
      * Calcule le montant total de la souscription sur la période:
-     * - on somme les minutes de chaque occurrence de slot entre startDate et endDate
-     * - billedMinutes() applique l'arrondi au slotMinutes (ex: 15min)
-     * - amountForMinutes() applique le hourlyRate
      *
      * @param array<int, array{dow:int,start:string,end:string}> $weeklySlots
      */

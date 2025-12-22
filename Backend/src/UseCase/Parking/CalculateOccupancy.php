@@ -20,19 +20,13 @@ final class CalculateOccupancy
     {
         $stationnements = $this->stationnements->countActiveByParkingId($parkingId);
 
-        // "maintenant" au format attendu par le repo
+        
         $at = (new \DateTimeImmutable('now'))->format('Y-m-d H:i:s');
         $subs = $this->subscriptions->countActiveNow($parkingId, $at);
 
         return $stationnements + $subs;
     }
 
-    /**
-     * Occupation sur un créneau:
-     * - stationnements qui chevauchent le créneau
-     * - + réservations qui chevauchent le créneau, en excluant celles déjà entrées
-     * - + abonnements actifs sur ce créneau
-     */
     public function forSlot(int $parkingId, string $startAt, string $endAt): int
     {
         $stationnements = $this->stationnements->countOverlappingForSlot($parkingId, $startAt, $endAt);
@@ -44,7 +38,7 @@ final class CalculateOccupancy
 
     public function totalForAvailability(int $parkingId, string $startAt, string $endAt): int
     {
-        // IMPORTANT: ne pas faire now()+forSlot(), sinon tu doubles.
+        // IMPORTANT: ne pas faire now()+forSlot(), sinon ça doubles.
         return $this->forSlot($parkingId, $startAt, $endAt);
     }
 }

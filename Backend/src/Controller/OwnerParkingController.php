@@ -41,9 +41,7 @@ final class OwnerParkingController
         $ownerId = (int)($payload['sub'] ?? 0);
         $data = json_decode(file_get_contents('php://input') ?: '[]', true) ?: [];
 
-        // Normalisation légère (controller = input boundary)
-        // - address: string
-        // - opening_days: int[] 1..7 (si absent => default géré par usecase/repo)
+
         if (isset($data['address'])) {
             $data['address'] = (string)$data['address'];
         }
@@ -51,7 +49,7 @@ final class OwnerParkingController
         if (isset($data['opening_days'])) {
             $days = $data['opening_days'];
 
-            // accepte "1,4" ou ["1","4"] ou [1,4]
+
             if (is_string($days)) {
                 $days = array_filter(array_map('trim', explode(',', $days)), fn($v) => $v !== '');
             }

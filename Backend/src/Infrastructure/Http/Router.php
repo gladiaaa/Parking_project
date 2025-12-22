@@ -30,37 +30,42 @@ final class Router
         return $this;
     }
 
-public function dispatch(string $method, string $path): void
-{
-    $path = rtrim($path, '/');
-    if ($path === '') $path = '/';
+    public function dispatch(string $method, string $path): void
+    {
+        $path = rtrim($path, '/');
+        if ($path === '') $path = '/';
 
-    [$handler, $params] = $this->match($method, $path);
+        [$handler, $params] = $this->match($method, $path);
 
-    if (!$handler) {
-        Response::json(['error' => 'Not found'], 404);
-        return;
-    }
+        if (!$handler) {
+            Response::json(['error' => 'Not found'], 404);
+            return;
+        }
 
-    if (is_array($handler) && is_object($handler[0])) {
-        $controller = $handler[0];
-        $methodName = $handler[1];
+        // Controller instance handler: [$controller, 'method']
+        if (is_array($handler) && is_object($handler[0])) {
+            $controller = $handler[0];
+            $methodName = (string) $handler[1];
 
-        $this->applyGuards($controller, $methodName);
+            // ✅ if guard denied, stop here
+            if (!$this->applyGuards($controller, $methodName)) {
+                return;
+            }
 
+            $this->call($handler, $params);
+            return;
+        }
+
+        // Class-string handler: ['SomeControllerClass', 'method']
+        if (is_array($handler) && is_string($handler[0])) {
+            $obj = new $handler[0]();
+            $this->call([$obj, $handler[1]], $params);
+            return;
+        }
+
+        // Closure
         $this->call($handler, $params);
-        return;
     }
-
-    if (is_array($handler) && is_string($handler[0])) {
-        $obj = new $handler[0]();
-        $this->call([$obj, $handler[1]], $params);
-        return;
-    }
-
-    $this->call($handler, $params);
-}
-
 
     private function match(string $method, string $path): array
     {
@@ -77,7 +82,7 @@ public function dispatch(string $method, string $path): void
                 $params = [];
                 foreach ($route['vars'] as $varName) {
                     if (isset($m[$varName])) {
-                        $params[] = ctype_digit($m[$varName]) ? (int)$m[$varName] : $m[$varName];
+                        $params[] = ctype_digit($m[$varName]) ? (int) $m[$varName] : $m[$varName];
                     }
                 }
                 return [$route['handler'], $params];
@@ -102,35 +107,40 @@ public function dispatch(string $method, string $path): void
         return ['#^' . $regex . '$#', $vars];
     }
 
-    private function applyGuards(object $controller, string $methodName): void
+    /**
+     * @return bool true si autorisé, false si bloqué (401/403/500 déjà écrit)
+     */
+    private function applyGuards(object $controller, string $methodName): bool
     {
         $ref = new ReflectionMethod($controller, $methodName);
         $attributes = $ref->getAttributes(IsGranted::class);
 
         foreach ($attributes as $attribute) {
-            $instance = $attribute->newInstance();
+            /** @var IsGranted $guard */
+            $guard = $attribute->newInstance();
 
             // If controller has method jwt(): JwtManager
             if (method_exists($controller, 'jwt')) {
-                $instance->assert($controller->jwt());
-                continue;
+                return $guard->assert($controller->jwt());
             }
 
             // If controller has readable property $jwt
             if (property_exists($controller, 'jwt')) {
                 try {
                     /** @phpstan-ignore-next-line */
-                    $instance->assert($controller->jwt);
-                    continue;
+                    return $guard->assert($controller->jwt);
                 } catch (\Throwable) {
                     Response::json(['error' => 'Controller JWT is not accessible'], 500);
-                    exit;
+                    return false;
                 }
             }
 
             Response::json(['error' => 'Controller missing JWT'], 500);
-            exit;
+            return false;
         }
+
+        // No guard => allowed
+        return true;
     }
 
     private function call($handler, array $params): void
@@ -140,7 +150,6 @@ public function dispatch(string $method, string $path): void
             return;
         }
 
-        // Closure
         call_user_func($handler, ...$params);
     }
 }

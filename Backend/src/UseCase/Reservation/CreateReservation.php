@@ -37,7 +37,7 @@ final class CreateReservation
             throw new \RuntimeException('Invalid time range');
         }
 
-        // ✅ NEW: parking fermé sur le créneau => réservation interdite
+
         if (!$parking->isOpenForSlot($start, $end)) {
             throw new \RuntimeException('Parking closed for this time slot');
         }
@@ -45,12 +45,12 @@ final class CreateReservation
         $startStr = $start->format('Y-m-d H:i:s');
         $endStr   = $end->format('Y-m-d H:i:s');
 
-        // ✅ anti-abus: un user ne peut pas avoir 2 réservations qui se chevauchent
+        //  un user ne peut pas avoir 2 réservations qui se chevauchent
         if ($this->reservationRepo->existsOverlappingForUser($userId, $startStr, $endStr)) {
             throw new \RuntimeException('User already has a reservation overlapping this time range');
         }
 
-        // ✅ si l’utilisateur est couvert par un abonnement sur ce créneau, il n’a pas besoin de réserver
+        //  si l’utilisateur est couvert par un abonnement sur ce créneau, il n’a pas besoin de réserver
         if ($this->subscriptions->coversUserForSlot($userId, $parkingId, $startStr, $endStr)) {
             throw new \RuntimeException('Reservation not required: covered by an active subscription');
         }

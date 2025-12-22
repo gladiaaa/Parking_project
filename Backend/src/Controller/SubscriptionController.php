@@ -68,7 +68,6 @@ final class SubscriptionController
                     'start_date'   => $sub->startDate()->format('Y-m-d'),
                     'end_date'     => $sub->endDate()->format('Y-m-d'),
                     'weekly_slots' => $sub->weeklySlots(),
-                    // ✅ AJOUT: montant "facturé" (calculé et stocké)
                     'amount'       => $sub->amount(),
                 ],
             ], 201);
@@ -103,7 +102,6 @@ final class SubscriptionController
                 'start_date'   => $s->startDate()->format('Y-m-d'),
                 'end_date'     => $s->endDate()->format('Y-m-d'),
                 'weekly_slots' => $s->weeklySlots(),
-                // ✅ AJOUT: montant
                 'amount'       => $s->amount(),
             ];
         }

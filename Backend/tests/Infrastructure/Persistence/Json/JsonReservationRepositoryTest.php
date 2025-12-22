@@ -66,4 +66,5 @@ final class JsonReservationRepositoryTest extends TestCase
         $this->assertCount(1, $list);
         $this->assertSame(1, $list[0]->userId());
     }
+    
 }

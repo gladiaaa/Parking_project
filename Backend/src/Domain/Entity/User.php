@@ -106,7 +106,6 @@ final class User
         return $c;
     }
 
-    // Pour TOTP uniquement
     public function withTotpSecret(string $secret): self
     {
         $c = clone $this;
@@ -119,9 +118,6 @@ final class User
         return $this->twoFactorTotpSecret !== null && $this->twoFactorTotpSecret !== '';
     }
 
-    // ====================
-    // 2FA - challenge code (email / sms)
-    // ====================
 
     public function twoFactorLastCode(): ?string
     {

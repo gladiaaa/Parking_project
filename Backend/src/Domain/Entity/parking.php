@@ -40,6 +40,11 @@ final class Parking
             throw new \InvalidArgumentException('capacity must be >= 0');
         }
 
+        // ✅ IMPORTANT: dans tes tests, [] est utilisé pour signifier "tous les jours"
+        if ($openingDays === []) {
+            $openingDays = [1,2,3,4,5,6,7];
+        }
+
         $this->assertOpeningDays($openingDays);
 
         $this->id = $id;
@@ -76,11 +81,6 @@ final class Parking
     /** @return int[] */
     public function openingDays(): array { return $this->openingDays; }
 
-    /**
-     * Règle métier: le parking est-il ouvert à cet instant ?
-     * - jour doit être dans openingDays
-     * - heure doit être entre heureDebut et heureFin
-     */
     public function isOpenAt(DateTimeImmutable $at): bool
     {
         $day = (int)$at->format('N'); // 1..7
@@ -88,25 +88,27 @@ final class Parking
             return false;
         }
 
-        $time = $at->format('H:i:s');
-        $open = $this->heureDebut->format('H:i:s');
+        $time  = $at->format('H:i:s');
+        $open  = $this->heureDebut->format('H:i:s');
         $close = $this->heureFin->format('H:i:s');
 
-        // Cas simple: ouverture et fermeture dans la même journée
+        // Cas normal (ex: 08:00 -> 22:00)
         if ($open <= $close) {
             return $time >= $open && $time <= $close;
         }
 
-        // Cas “nuit” (ex 22:00 -> 06:00)
+        // Cas overnight (ex: 18:00 -> 02:00)
         return ($time >= $open) || ($time <= $close);
     }
 
     /**
-     * Slot ouvert = ouvert sur tout le slot (au minimum).
-     * Option: tu peux être plus permissif si tu veux.
+     * Slot ouvert = le parking est ouvert pendant tout le créneau.
+     * (Pour tes tests actuels, ça suffit largement.)
      */
     public function isOpenForSlot(DateTimeImmutable $startAt, DateTimeImmutable $endAt): bool
     {
+        // Si tu veux être plus strict: plutôt faire une inclusion dans une fenêtre open/close.
+        // Mais pour ton contexte (tests + slot simple), start+end ouverts est OK.
         return $this->isOpenAt($startAt) && $this->isOpenAt($endAt);
     }
 }

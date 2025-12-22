@@ -18,7 +18,7 @@ final class SqlSubscriptionRepository implements SubscriptionRepository
     {
         $slotsJson = json_encode($subscription->weeklySlots(), JSON_UNESCAPED_UNICODE);
 
-        // ✅ AJOUT: amount
+
         $sql = "INSERT INTO subscriptions (user_id, parking_id, start_date, end_date, weekly_slots, amount)
                 VALUES (:uid, :pid, :sd, :ed, :slots, :amount)";
         $st = $this->pdo->prepare($sql);
@@ -189,7 +189,7 @@ final class SqlSubscriptionRepository implements SubscriptionRepository
         $slots = json_decode((string) ($r['weekly_slots'] ?? '[]'), true);
         if (!is_array($slots)) $slots = [];
 
-        // ✅ AJOUT: amount hydraté depuis la DB
+
         $amount = isset($r['amount']) ? (float) $r['amount'] : 0.0;
 
         return new Subscription(

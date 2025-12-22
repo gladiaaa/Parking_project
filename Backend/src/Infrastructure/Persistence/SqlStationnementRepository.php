@@ -153,9 +153,7 @@ public function revenueForParking(string $from, string $to, int $parkingId): arr
 }
 public function countOverlappingForSlot(int $parkingId, string $startAt, string $endAt): int
 {
-    // Overlap condition:
-    // entered_at < endAt AND (exited_at IS NULL OR exited_at > startAt)
-    // parking_id via reservations
+
     $sql = "
         SELECT COUNT(*) AS c
         FROM stationnements s

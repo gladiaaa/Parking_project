@@ -23,7 +23,6 @@ final class StartTwoFactor
 
         $method = $user->twoFactorMethod();
 
-        // TOTP : pas de code à générer, l’app TOTP a déjà le secret
         if ($method === 'totp') {
             return;
         }

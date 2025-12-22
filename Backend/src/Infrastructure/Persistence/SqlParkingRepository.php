@@ -93,7 +93,7 @@ final class SqlParkingRepository implements ParkingRepository
 
         $gps = $row['latitude'] . ',' . $row['longitude'];
 
-        // Décodage sécurisé des jours d’ouverture
+
         try {
             $openingDays = json_decode(
                 (string)($row['opening_days'] ?? '[]'),
@@ -124,7 +124,7 @@ final class SqlParkingRepository implements ParkingRepository
     }
 
     /**
-     * Listing des parkings d’un owner (format brut pour API)
+     * Listing des parkings d’un owner (format brut)
      */
     public function listByOwnerId(int $ownerId): array
     {
@@ -172,7 +172,7 @@ final class SqlParkingRepository implements ParkingRepository
  */
 public function searchNearby(float $lat, float $lng, float $radiusKm): array
 {
-    // Haversine (distance en km)
+
     $sql = "
         SELECT
             id,

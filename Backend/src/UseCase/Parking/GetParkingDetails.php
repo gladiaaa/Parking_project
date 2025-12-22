@@ -11,13 +11,7 @@ final class GetParkingDetails
         private readonly ParkingRepository $parkings
     ) {}
 
-    /**
-     * Retourne un tableau prêt pour l'API.
-     * IMPORTANT:
-     * - On renvoie "address" (pas "adress")
-     * - opening_days en array<int> (1..7)
-     * - opening_time / closing_time format "H:i:s"
-     */
+
     public function execute(int $id): array
     {
         if ($id <= 0) {
@@ -44,11 +38,11 @@ final class GetParkingDetails
             'id' => $parking->id(),
             'capacity' => $parking->capacity(),
 
-            // ✅ pour le front
+
             'latitude' => $lat,
             'longitude' => $lng,
 
-            // ✅ address + opening_days (CE QUI TE MANQUE)
+
             'address' => $parking->address(),
             'opening_days' => $parking->openingDays(),
 

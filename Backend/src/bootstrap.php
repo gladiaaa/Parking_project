@@ -64,39 +64,47 @@ define('STORAGE_DIR', APP_ROOT . DIRECTORY_SEPARATOR . 'var' . DIRECTORY_SEPARAT
 // =====================
 // Helpers
 // =====================
-function cors(): void
-{
-    header('Access-Control-Allow-Origin: ' . ($_ENV['APP_ORIGIN'] ?? '*'));
-    header('Access-Control-Allow-Credentials: true');
-    header('Access-Control-Allow-Headers: Content-Type, X-Requested-With');
-    header('Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS');
-    header('Content-Type: application/json; charset=utf-8');
+if (!function_exists('cors')) {
+    function cors(): void
+    {
+        header('Access-Control-Allow-Origin: ' . ($_ENV['APP_ORIGIN'] ?? '*'));
+        header('Access-Control-Allow-Credentials: true');
+        header('Access-Control-Allow-Headers: Content-Type, X-Requested-With');
+        header('Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS');
+        header('Content-Type: application/json; charset=utf-8');
+    }
 }
 
-function pdo(): PDO
-{
-    static $pdo = null;
-    if ($pdo) return $pdo;
 
-    $dsn = 'mysql:host=' . $_ENV['DB_HOST'] .
-        ';dbname=' . $_ENV['DB_NAME'] .
-        ';charset=' . ($_ENV['DB_CHARSET'] ?? 'utf8mb4');
+if (!function_exists('pdo')) {
+    function pdo(): PDO
+    {
+        static $pdo = null;
+        if ($pdo) return $pdo;
 
-    $pdo = new PDO($dsn, $_ENV['DB_USER'], $_ENV['DB_PASS'], [
-        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-    ]);
+        $dsn = 'mysql:host=' . $_ENV['DB_HOST'] .
+            ';dbname=' . $_ENV['DB_NAME'] .
+            ';charset=' . ($_ENV['DB_CHARSET'] ?? 'utf8mb4');
 
-    return $pdo;
+        $pdo = new PDO($dsn, $_ENV['DB_USER'], $_ENV['DB_PASS'], [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+        ]);
+
+        return $pdo;
+    }
 }
+
 
 // =====================
 // CORS + preflight
 // =====================
-cors();
-if (($_SERVER['REQUEST_METHOD'] ?? '') === 'OPTIONS') {
-    http_response_code(204);
-    exit;
+if (($_ENV['APP_ENV'] ?? '') !== 'test') {
+    cors();
+    if (($_SERVER['REQUEST_METHOD'] ?? '') === 'OPTIONS') {
+        http_response_code(204);
+        exit;
+    }
 }
 
 // =====================
@@ -317,3 +325,4 @@ $router
     ->post('/api/reservations/{id}/exit', [$reservationController, 'exit'])
     ->get('/api/reservations/{id}/invoice', [$reservationController, 'invoice'])
     ->post('/api/reservations/{id}/cancel', [$reservationController, 'cancel']);
+return $router;

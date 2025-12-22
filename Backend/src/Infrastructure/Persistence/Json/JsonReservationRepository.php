@@ -62,18 +62,18 @@ final class JsonReservationRepository implements ReservationRepository
     private function hydrate(array $row): Reservation
     {
         return new Reservation(
-            isset($row['id']) ? (int) $row['id'] : null,
-            (int) $row['user_id'],
-            (int) $row['parking_id'],
-            new \DateTimeImmutable((string) $row['start_at']),
-            new \DateTimeImmutable((string) $row['end_at']),
-            new \DateTimeImmutable((string) $row['created_at']),
-            (string) $row['vehicle_type'],
-            (float) $row['amount']
+            isset($row['id']) ? (int)$row['id'] : null,
+            (int)$row['user_id'],
+            (int)$row['parking_id'],
+            new \DateTimeImmutable((string)$row['start_at']),
+            new \DateTimeImmutable((string)$row['end_at']),
+            new \DateTimeImmutable((string)$row['created_at']),
+            (string)$row['vehicle_type'],
+            (float)$row['amount']
         );
     }
 
-    /** @return Reservation[] */
+    /** @param array<int, array<string,mixed>> $rows @return Reservation[] */
     private function hydrateAll(array $rows): array
     {
         return array_map(fn(array $r) => $this->hydrate($r), $rows);
@@ -82,6 +82,7 @@ final class JsonReservationRepository implements ReservationRepository
     /** @return array<string,mixed> */
     private function toRow(Reservation $r): array
     {
+
         return [
             'id' => $r->id(),
             'user_id' => $r->userId(),
@@ -94,23 +95,22 @@ final class JsonReservationRepository implements ReservationRepository
         ];
     }
 
+    /** @param array<int, array<string,mixed>> $rows */
     private function nextId(array $rows): int
     {
         $max = 0;
         foreach ($rows as $r) {
-            $max = max($max, (int) ($r['id'] ?? 0));
+            $max = max($max, (int)($r['id'] ?? 0));
         }
         return $max + 1;
     }
 
-    // -------------------------
-    // Interface ReservationRepository
-    // -------------------------
+
 
     public function findById(int $id): ?Reservation
     {
         foreach ($this->readRows() as $row) {
-            if ((int) ($row['id'] ?? 0) === $id) {
+            if ((int)($row['id'] ?? 0) === $id) {
                 return $this->hydrate($row);
             }
         }
@@ -131,11 +131,23 @@ final class JsonReservationRepository implements ReservationRepository
             return $saved;
         }
 
-        // Update si jamais tu l’utilises plus tard
+       
         $updated = false;
         foreach ($rows as $i => $row) {
-            if ((int) ($row['id'] ?? 0) === (int) $reservation->id()) {
+            if ((int)($row['id'] ?? 0) === (int)$reservation->id()) {
+                
+                $existingStatus = $rows[$i]['status'] ?? null;
+                $existingCancelledAt = $rows[$i]['cancelled_at'] ?? null;
+
                 $rows[$i] = $this->toRow($reservation);
+
+                if ($existingStatus !== null) {
+                    $rows[$i]['status'] = $existingStatus;
+                }
+                if ($existingCancelledAt !== null) {
+                    $rows[$i]['cancelled_at'] = $existingCancelledAt;
+                }
+
                 $updated = true;
                 break;
             }
@@ -148,28 +160,75 @@ final class JsonReservationRepository implements ReservationRepository
         return $reservation;
     }
 
+    /**
+     * @return Reservation[]
+     */
     public function findByUserId(int $userId): array
     {
         $rows = array_filter(
             $this->readRows(),
-            fn(array $r) => (int) $r['user_id'] === $userId
+            fn(array $r) => (int)($r['user_id'] ?? 0) === $userId
         );
 
-        // ORDER BY start_at DESC
-        usort($rows, fn($a, $b) => strcmp((string) $b['start_at'], (string) $a['start_at']));
+
+        usort($rows, fn($a, $b) => strcmp((string)$b['start_at'], (string)$a['start_at']));
 
         return $this->hydrateAll($rows);
     }
 
+    /**
+     * @return Reservation[]
+     */
+    public function listForUser(int $userId): array
+    {
+        return $this->findByUserId($userId);
+    }
+
+    /**
+     * Annule une réservation appartenant à l'utilisateur.
+     * Retourne false si:
+     * - réservation inexistante
+     * - réservation pas à l'utilisateur
+     * - déjà annulée
+     */
+    public function cancelForUser(int $userId, int $reservationId, string $now): bool
+    {
+        $rows = $this->readRows();
+        $updated = false;
+
+        foreach ($rows as $i => $row) {
+            if (
+                (int)($row['id'] ?? 0) === $reservationId &&
+                (int)($row['user_id'] ?? 0) === $userId
+            ) {
+                if (($row['status'] ?? 'active') !== 'active') {
+                    return false; // déjà annulée (ou autre statut)
+                }
+
+                $rows[$i]['status'] = 'cancelled';
+                $rows[$i]['cancelled_at'] = (new \DateTimeImmutable())->format('Y-m-d H:i:s');
+                $updated = true;
+                break;
+            }
+        }
+
+        if ($updated) {
+            $this->writeRows($rows);
+        }
+
+        return $updated;
+    }
+
+    /** @return Reservation[] */
     public function findByParkingId(int $parkingId): array
     {
         $rows = array_filter(
             $this->readRows(),
-            fn(array $r) => (int) $r['parking_id'] === $parkingId
+            fn(array $r) => (int)($r['parking_id'] ?? 0) === $parkingId
         );
 
         // ORDER BY start_at DESC
-        usort($rows, fn($a, $b) => strcmp((string) $b['start_at'], (string) $a['start_at']));
+        usort($rows, fn($a, $b) => strcmp((string)$b['start_at'], (string)$a['start_at']));
 
         return $this->hydrateAll($rows);
     }
@@ -184,12 +243,12 @@ final class JsonReservationRepository implements ReservationRepository
 
         $count = 0;
         foreach ($this->readRows() as $r) {
-            if ((int) $r['parking_id'] !== $parkingId) {
+            if ((int)($r['parking_id'] ?? 0) !== $parkingId) {
                 continue;
             }
 
             // start_at < end_at AND end_at > start_at
-            if ((string) $r['start_at'] < $end && (string) $r['end_at'] > $start) {
+            if ((string)($r['start_at'] ?? '') < $end && (string)($r['end_at'] ?? '') > $start) {
                 $count++;
             }
         }
@@ -201,31 +260,34 @@ final class JsonReservationRepository implements ReservationRepository
     {
         $rows = array_filter(
             $this->readRows(),
-            fn(array $r) => (int) $r['parking_id'] === $parkingId
+            fn(array $r) => (int)($r['parking_id'] ?? 0) === $parkingId
         );
 
         if ($from) {
             // end_at >= from
-            $rows = array_filter($rows, fn(array $r) => (string) $r['end_at'] >= $from);
+            $rows = array_filter($rows, fn(array $r) => (string)($r['end_at'] ?? '') >= $from);
         }
         if ($to) {
             // start_at <= to
-            $rows = array_filter($rows, fn(array $r) => (string) $r['start_at'] <= $to);
+            $rows = array_filter($rows, fn(array $r) => (string)($r['start_at'] ?? '') <= $to);
         }
 
         // ORDER BY start_at ASC
-        usort($rows, fn($a, $b) => strcmp((string) $a['start_at'], (string) $b['start_at']));
+        usort($rows, fn($a, $b) => strcmp((string)$a['start_at'], (string)$b['start_at']));
 
         return array_map(
             fn(array $r) => [
-                'id' => (int) $r['id'],
-                'user_id' => (int) $r['user_id'],
-                'parking_id' => (int) $r['parking_id'],
-                'start_at' => (string) $r['start_at'],
-                'end_at' => (string) $r['end_at'],
-                'vehicle_type' => (string) $r['vehicle_type'],
-                'amount' => (float) $r['amount'],
-                'created_at' => (string) $r['created_at'],
+                'id' => (int)($r['id'] ?? 0),
+                'user_id' => (int)($r['user_id'] ?? 0),
+                'parking_id' => (int)($r['parking_id'] ?? 0),
+                'start_at' => (string)($r['start_at'] ?? ''),
+                'end_at' => (string)($r['end_at'] ?? ''),
+                'vehicle_type' => (string)($r['vehicle_type'] ?? ''),
+                'amount' => (float)($r['amount'] ?? 0),
+                'created_at' => (string)($r['created_at'] ?? ''),
+                // status/cancelled_at peuvent exister, mais restent optionnels
+                'status' => (string)($r['status'] ?? 'active'),
+                'cancelled_at' => $r['cancelled_at'] ?? null,
             ],
             $rows
         );
@@ -244,7 +306,7 @@ final class JsonReservationRepository implements ReservationRepository
             if (is_array($st)) {
                 foreach ($st as $s) {
                     if (($s['exited_at'] ?? null) === null) {
-                        $rid = (int) ($s['reservation_id'] ?? 0);
+                        $rid = (int)($s['reservation_id'] ?? 0);
                         if ($rid > 0) {
                             $activeReservationIds[$rid] = true;
                         }
@@ -255,19 +317,19 @@ final class JsonReservationRepository implements ReservationRepository
 
         $rows = array_filter(
             $this->readRows(),
-            fn(array $r) => (int) $r['parking_id'] === $parkingId
+            fn(array $r) => (int)($r['parking_id'] ?? 0) === $parkingId
         );
 
         $count = 0;
         foreach ($rows as $r) {
-            $rid = (int) ($r['id'] ?? 0);
+            $rid = (int)($r['id'] ?? 0);
 
             if ($rid > 0 && isset($activeReservationIds[$rid])) {
                 continue;
             }
 
-            $rs = (string) $r['start_at'];
-            $re = (string) $r['end_at'];
+            $rs = (string)($r['start_at'] ?? '');
+            $re = (string)($r['end_at'] ?? '');
 
             // NOT (end_at <= start OR start_at >= end)
             $overlap = !($re <= $startAt || $rs >= $endAt);

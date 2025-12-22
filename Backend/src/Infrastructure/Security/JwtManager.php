@@ -68,14 +68,23 @@ final class JwtManager
     private function cookie(string $name, string $value, int $ttl): void
     {
         $secure = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on';
+
+        // Set real cookie (prod / navigateur)
         setcookie($name, $value, [
             'expires' => time() + $ttl,
             'path' => '/',
             'secure' => $secure,
             'httponly' => true,
-            'samesite' => $secure ? 'None' : 'Lax'
+            'samesite' => $secure ? 'None' : 'Lax',
         ]);
+
+        // ✅ IMPORTANT: en CLI/phpunit, setcookie n'alimente pas toujours headers_list().
+        // Donc on simule le navigateur en stockant aussi dans $_COOKIE, uniquement en test.
+        if (($_ENV['APP_ENV'] ?? '') === 'test') {
+            $_COOKIE[$name] = $value;
+        }
     }
+
 
     // --- Helpers “lecture”
     public function readAccessFromCookie(): ?array

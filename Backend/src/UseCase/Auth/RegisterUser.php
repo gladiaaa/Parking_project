@@ -16,10 +16,24 @@ final class RegisterUser
     public function execute(
         string $email,
         string $password,
-        string $role= 'USER',
-        ?string $firstname,
-        ?string $lastname
+        string $role = 'USER',
+        ?string $firstname = null,
+        ?string $lastname = null
     ): array {
+        $email = trim($email);
+        $role  = strtoupper(trim($role));
+
+        // ✅ normalisation: DB NOT NULL => jamais null/empty
+        $firstname = $this->normalizeName($firstname, 'User');
+        $lastname  = $this->normalizeName($lastname, 'User');
+
+        if ($email === '') {
+            throw new \RuntimeException('Email is required');
+        }
+        if ($password === '') {
+            throw new \RuntimeException('Password is required');
+        }
+
         if ($this->repo->findByEmail($email)) {
             throw new \RuntimeException("Email already in use");
         }
@@ -41,5 +55,11 @@ final class RegisterUser
             'lastname' => $user->lastname(),
             'role' => $user->role(),
         ];
+    }
+
+    private function normalizeName(?string $value, string $fallback): string
+    {
+        $v = trim((string)($value ?? ''));
+        return $v !== '' ? $v : $fallback;
     }
 }

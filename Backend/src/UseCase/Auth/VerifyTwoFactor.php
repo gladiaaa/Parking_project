@@ -29,7 +29,6 @@ final class VerifyTwoFactor
     $valid = false;
 
     if ($method === 'email' || $method === 'sms') {
-      // helper du domaine
       $valid = $user->hasValid2FACode($code, $now);
     } elseif ($method === 'totp') {
       if (!$user->hasTotpConfigured()) {
@@ -50,7 +49,6 @@ final class VerifyTwoFactor
       throw new \RuntimeException('Invalid 2FA code');
     }
 
-    // Nettoyer le challenge pour email/sms
     if ($method === 'email' || $method === 'sms') {
       $user = $user->clear2FA();
       $this->userRepository->save($user);

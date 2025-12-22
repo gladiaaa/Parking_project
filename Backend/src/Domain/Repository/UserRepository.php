@@ -10,7 +10,6 @@ interface UserRepository
     public function findById(int $id): ?User;
     public function findByEmail(string $email): ?User;
 
-    // 👇 on remplace save2FA par ça
     public function save(User $user): void;
   public function create(
     string $email,

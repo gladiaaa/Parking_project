@@ -17,5 +17,8 @@
         <include>
             <directory suffix=".php">src</directory>
         </include>
-    </source>
+        <exclude>
+            <file>src/seed.php</file>
+        </exclude>
+        </source>
 </phpunit>

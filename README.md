@@ -12,7 +12,7 @@ Application web moderne permettant de réserver des places de parking dans toute
 Parking_project/
 ├── frontend/          # React + Tailwind CSS
 ├── Backend/           # API PHP + MySQL
-├── sql/               # Scripts de base de données
+├── sql/               # import de la BDD
 └── README.md          # Ce fichier
 ```
 
@@ -33,6 +33,8 @@ npm start
 # 1. Créer la base de données
 mysql -u root -p < sql/001_init_core.sql
 mysql -u root -p < sql/002_insert_parkings.sql
+
+# Un fichier d'import sql est également disponible  "ImportParking_app.sql" 
 
 # 2. Configurer .env
 cp .env.example .env
@@ -132,13 +134,18 @@ sql/
 3. **Configurer la base de données**
    ```bash
    mysql -u root -p < sql/001_init_core.sql
-   mysql -u root -p < sql/002_insert_parkings.sql
+
+   ou en cas de problème importer le fichier Parking_Help.sql 
    ```
 
-4. **Configurer l'environnement**
+4. **Configurer l'environnement backend**
+
    ```bash
-   cp .env.example .env
-   # Éditer .env avec vos paramètres MySQL
+   
+   cd /Backend
+   Composer install
+   # .env.exemple disponible dans le /backend
+   # Éditer .env dans /Backend avec vos paramètres MySQL
    ```
 
 5. **Démarrer les serveurs**
@@ -151,6 +158,17 @@ sql/
    cd Backend
    php -S localhost:8001 -t public
    ```
+   ## Login User/Owner
+### User
+
+- Identifiant : User.siriphol@gmail.com
+- mot de passe : UserTest
+
+### Owner
+
+- Identifiant : Owner.siriphol@gmail.com
+- mot de passe : OwnerTest
+
 
 ### Utilisation quotidienne
 
@@ -182,4 +200,12 @@ Pour toute question, consulter :
 
 ---
 
+
+
+
 **Développé avec ❤️ pour le projet de groupe**
+
+ANNIC Ryan
+BONNICHON-JAQUES Baptiste
+MOUHAJER Rayane
+PAES RODRIGUES DA SILVA Raphael

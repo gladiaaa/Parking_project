@@ -40,6 +40,7 @@ final class JsonStationnementRepository implements StationnementRepository
         );
     }
 
+    /** @param array<int, array<string,mixed>> $rows */
     private function nextId(array $rows): int
     {
         $max = 0;
@@ -83,6 +84,8 @@ final class JsonStationnementRepository implements StationnementRepository
         return $res ? $res->parkingId() : null;
     }
 
+
+
     public function save(Stationnement $s): Stationnement
     {
         $rows = $this->readRows();
@@ -97,7 +100,7 @@ final class JsonStationnementRepository implements StationnementRepository
             return $saved;
         }
 
-        // Pas d'update en SQL dans save(), mais on peut le supporter sans casser
+
         foreach ($rows as $i => $row) {
             if ((int)($row['id'] ?? 0) === (int)$s->id()) {
                 $rows[$i] = $this->toRow($s);
@@ -118,7 +121,7 @@ final class JsonStationnementRepository implements StationnementRepository
 
         if (!$rows) return null;
 
-        // SQL: ORDER BY entered_at DESC LIMIT 1
+
         usort($rows, fn($a, $b) => strcmp((string)$b['entered_at'], (string)$a['entered_at']));
         return $this->hydrate($rows[0]);
     }
@@ -151,7 +154,7 @@ final class JsonStationnementRepository implements StationnementRepository
 
         if (!$rows) return null;
 
-        // SQL: ORDER BY entered_at DESC LIMIT 1
+
         usort($rows, fn($a, $b) => strcmp((string)$b['entered_at'], (string)$a['entered_at']));
         return $this->hydrate($rows[0]);
     }
@@ -171,10 +174,9 @@ final class JsonStationnementRepository implements StationnementRepository
             }
         }
 
-        // SQL: ORDER BY s.entered_at DESC
+
         usort($active, fn($a, $b) => strcmp((string)$b['entered_at'], (string)$a['entered_at']));
 
-        // SQL renvoie des tableaux avec ces colonnes
         return array_map(
             fn(array $r) => [
                 'id' => (int)$r['id'],
@@ -191,7 +193,6 @@ final class JsonStationnementRepository implements StationnementRepository
 
     public function countActiveByParkingId(int $parkingId): int
     {
-        // SQL fait un COUNT sur active, donc on reproduit
         $count = 0;
 
         foreach ($this->readRows() as $r) {
@@ -206,12 +207,34 @@ final class JsonStationnementRepository implements StationnementRepository
         return $count;
     }
 
+    public function countOverlappingForSlot(int $parkingId, string $startAt, string $endAt): int
+    {
+        $count = 0;
+
+        foreach ($this->readRows() as $r) {
+            $rid = (int)($r['reservation_id'] ?? 0);
+            if ($rid <= 0) continue;
+
+            $pid = $this->parkingIdFromReservationId($rid);
+            if ($pid !== $parkingId) continue;
+
+            $entered = (string)($r['entered_at'] ?? '');
+            if ($entered === '') continue;
+
+            $exited = $r['exited_at'] ?? null;
+            $effectiveEnd = $exited !== null ? (string)$exited : $endAt;
+
+        
+            if ($entered < $endAt && $effectiveEnd > $startAt) {
+                $count++;
+            }
+        }
+
+        return $count;
+    }
+
     public function revenueForParking(string $from, string $to, int $parkingId): array
     {
-        // SQL:
-        // exited_at IS NOT NULL
-        // exited_at >= from
-        // exited_at < to (borne haute exclusive)
         $countExits = 0;
         $totalBilled = 0.0;
         $totalPenalty = 0.0;
@@ -226,7 +249,7 @@ final class JsonStationnementRepository implements StationnementRepository
 
             $exitedAt = (string)$exited;
             if ($exitedAt < $from) continue;
-            if ($exitedAt >= $to) continue; // borne exclusive
+            if ($exitedAt >= $to) continue; 
 
             $countExits++;
             $totalBilled += (float)($r['billed_amount'] ?? 0.0);

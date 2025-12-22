@@ -198,7 +198,7 @@ private function intervalIsCoveredByWeeklySlots(\DateTimeImmutable $start, \Date
 }
 
 /**
- * Vérifie que [segStart..segEnd] est couvert par AU MOINS un slot (en tenant compte des slots “cross midnight”).
+
  * @param array<int, array{dow:int,start:string,end:string}> $weeklySlots
  */
 private function segmentCoveredForDay(\DateTimeImmutable $segStart, \DateTimeImmutable $segEnd, array $weeklySlots): bool

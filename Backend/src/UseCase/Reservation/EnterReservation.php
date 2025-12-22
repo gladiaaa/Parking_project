@@ -34,7 +34,7 @@ final class EnterReservation
             throw new \RuntimeException('Reservation not active');
         }
 
-        // ✅ NEW: parking doit être ouvert à l’instant de l’entrée
+        // parking doit être ouvert à l’instant de l’entrée
         $parking = $this->parkingRepo->findById($res->parkingId());
         if ($parking === null) {
             throw new \RuntimeException('Parking not found');

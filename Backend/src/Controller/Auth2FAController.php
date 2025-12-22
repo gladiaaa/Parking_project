@@ -33,26 +33,25 @@ final class Auth2FAController
         }
 
         try {
-            // Use case = logique métier
+            
             $tokens = $this->verifyTwoFactor->execute($userId, $code);
         } catch (\Throwable) {
             Response::json(['error' => 'Invalid 2FA'], 401);
             return;
         }
 
-        // Pose les cookies ACCESS / REFRESH
+      
         $this->jwt->setAccessCookie($tokens['access_token']);
         $this->jwt->setRefreshCookie($tokens['refresh_token']);
 
-        // On détruit le cookie P2_AUTH
-        $this->jwt->setPending2FACookie(''); // ou setcookie('P2_AUTH', '', time()-3600, '/');
+        
+        $this->jwt->setPending2FACookie(''); ;
 
         Response::json(['ok' => true]);
     }
 
     public function resend(): void
     {
-        // à implémenter si tu veux renvoyer un code, pour l’instant juste OK
         Response::json(['ok' => true]);
     }
 }

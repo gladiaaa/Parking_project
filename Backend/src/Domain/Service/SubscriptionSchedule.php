@@ -51,7 +51,6 @@ final class SubscriptionSchedule
         $end   = \DateTimeImmutable::createFromFormat('Y-m-d H:i:s', $endAt);
         if (!$start || !$end || $end <= $start) return false;
 
-        // pas de micro-optimisation débile: pas de 15 minutes = cohérent avec ta facturation
         $cursor = $start;
         while ($cursor < $end) {
             $d = $cursor->format('Y-m-d');

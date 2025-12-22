@@ -33,7 +33,6 @@ final class CheckAvailability
             throw new \RuntimeException('Invalid time range');
         }
 
-        // ✅ NEW: parking fermé sur ce créneau => pas disponible (même si capacité > 0)
         if (!$parking->isOpenForSlot($start, $end)) {
             return [
                 'parking_id' => $parkingId,
